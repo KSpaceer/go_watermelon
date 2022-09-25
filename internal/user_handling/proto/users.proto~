@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/KSpaceer/go_watermelon/user_handling/user_handling_proto";
+
+package user_handling_proto;
+
+service UserHandling {
+    rpc addUser(User) returns (Response) {}
+    rpc deleteUser(User) returns (Response) {}
+    rpc authUser(Key) returns (Response) {}
+    rpc listUsers(google.protobuf.Empty) returns (stream User) {}
+}
+
+message User {
+    string nickname = 1;
+    string email = 2;
+}
+
+message Key {
+    string key = 1;
+}
+
+message Response {
+    string message = 1;
+}
+
