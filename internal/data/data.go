@@ -8,6 +8,8 @@ import (
     "encoding/json"
     "time"
     "strings"
+    "os"
+    "path/filepath"
 
     _ "github.com/lib/pq"
 
@@ -35,14 +37,33 @@ type Operation struct {
     Method string `json: "method"`
 }
 
-func (d *Data) Connect(redisPort, pgsPort int) {
+func NewData(redisAddress, pgsInfoFile string) (*Data, error) {
+    d := new(Data)
     d.cache = redis.NewClient(&redisOptions{
-        Addr: fmt.Sprintf("localhost: %d", redisPort),
+        Addr: redisAddress,
         Password: "",
         DB: 0,
     }
-
-    pgsFile, err := os.Open(pgsParamsFile)
+    _, err := d.cache.Ping(context.Background()).Result()
+    if err != nil {
+        return nil, err
+    }
+    if !filepath.IsAbs(pgsInfoFile) {
+        pgsInfoFile, err = filepath.Abs(pgsInfoFile) 
+        if err != nil {
+            return err, nil
+        }
+    }
+    pgsInfo, err := os.ReadFile(pgsInfoFile)
+    d.db, err = sql.Open("postgres", string(pgsInfo))
+    if err != nil {
+        return nil, err
+    }
+    err = d.db.Ping()
+    if err != nil {
+        return nil, err
+    }
+    return d, nil
 }
 
 func (d *Data) GetOperation(ctx context.Context, key string) (Operation, error) {

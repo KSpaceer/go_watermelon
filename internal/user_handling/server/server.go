@@ -2,19 +2,35 @@ package uh_server
 
 import (
     "context"
-    "database/sql"
     
     "google.golang.org/grpc"
+
+    "github.com/Shopify/sarama"
     pb "github.com/KSpaceer/go_watermelon/internal/user_handling/proto/user_handling_proto"
     "github.com/KSpaceer/go_watermelon/internal/data"
 )
 
-type userHandlingServer struct {
+type UserHandlingServer struct {
     pb.UnimplementedUserHandlingServer
-    data.Data
+    *data.Data
+    sarama.SyncProducer
 }
 
-func (s *userHandlingServer) AuthUser(ctx context.Context, key *pb.Key) (*pb.Response, error) {
+func NewUserHandlingServer(redisAddress, pgsInfoFile string, brokersAddresses []string) (*userHandlingServer, error) {
+    s := &UserHandlingServer{}
+    var err error
+    s.Data, err = data.NewData(redisAddress, pgsInfoFile)
+    if err != nil {
+        return nil, err
+    }
+    s.SyncProducer, err = sarama.NewSyncProducer(brokersAddresses, sarama.NewConfig())
+    if err != nil {
+        return nil, err
+    }
+    return s, nil
+}
+
+func (s *UserHandlingServer) AuthUser(ctx context.Context, key *pb.Key) (*pb.Response, error) {
     operation, err := s.GetOperation(ctx, key) 
     if err != nil {
         return nil, err
@@ -29,7 +45,7 @@ func (s *userHandlingServer) AuthUser(ctx context.Context, key *pb.Key) (*pb.Res
     return &pb.Response{Message: "OK"}, nil
 }
 
-func (s *userHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Response, error) {
+func (s *UserHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Response, error) {
     if ok, err := s.CheckNicknameInDatabase(ctx, user.Nickname); err != nil {
         return nil, err
     } else if ok {
@@ -39,39 +55,49 @@ func (s *userHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Re
     if err != nil {
         return nil, err
     }
-    SendEmail(user.Email, "add")
+    err = s.sendEmail(user.Email, key, "ADD")
+    if err != nil {
+        return nil, err
+    }
     return &pb.Response{Message: "OK"}, nil
 }
 
-func (s *userHandlingServer) DeleteUser(ctx context.Context, user *pb.User) (*pb.Response, error) {
-    if ok, err := CheckNicknameInDatabase(ctx, user.Nickname); err != nil {
+func (s *UserHandlingServer) DeleteUser(ctx context.Context, user *pb.User) (*pb.Response, error) {
+    if ok, err := s.CheckNicknameInDatabase(ctx, user.Nickname); err != nil {
         return nil, err
     } else if !ok {
         return &pb.Response{Message: "There is no user with such nickname."}, nil
     }
-    SendEmail(user.Email, "delete")
+    key, err := s.SetOperation(ctx, data.User{user.Nickname, user.Email}, "DELETE")
+    if err != nil {
+        return nil, err
+    }
+    err = s.sendEmail(user, key,  "DELETE")
+    if err != nil {
+        return nil, err
+    }
     return &pb.Response{Message: "OK"}, nil
 }
 
-func (s *userHandlingServer) ListUsers(stream pb.UserHandling_ListUsersServer) error {
-    dataUsersList, err := s.GetUsersFromDatabase()
+func (s *UserHandlingServer) ListUsers(stream pb.UserHandling_ListUsersServer) error {
+    usersList, err := s.GetUsersFromDatabase()
     if err != nil {
         return err
     }
-    pbUsersList := convertDataUsersToPBUsers(dataUsersList)
-    for _, pbUser := range pbUsersList {
-        if err := stream.Send(pbUser); err != nil {
+    for _, user := range usersList {
+        if err := stream.Send(&pb.User{Nickname: user.Nickname, Email: user.Email}); err != nil {
             return err
         }
     }
     return nil
 }
 
-func convertDataUsersToPBUsers(dataUsers []data.User) []*pb.User {
-    pbUsers := make([]*pb.User, len(dataUsers))
-    for i, dataUser := range dataUsers {
-        pbUsers[i] = &pb.User{Nickname: dataUser.Nickname, Email: dataUser.Email}
+func (s *UserHandlingServer) sendEmail(email, method string) error {
+    msg := &sarama.ProducerMessage{
+        Topic: "auth"
+        Value: sarama.StringEncoder(email + " " + method)
     }
-    return psUsers
+    _, _, err := s.SendMessage(msg) // TODO: add partition and offset for logging
+    return err
 }
 
