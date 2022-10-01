@@ -106,7 +106,7 @@ func (d *Data) SetOperation(ctx context.Context, user User, method string) (stri
 func (d *Data) CheckNicknameInDatabase(ctx context.Context, nickname string) (bool, error) {
     result, err := d.cache.Get(ctx, nickname).Bool()
     if err == redis.Nil {
-        rows, err := d.db.QueryContext(ctx, "SELECT nickname FROM Users WHERE nickname = ?", nickname)        
+        rows, err := d.db.QueryContext(ctx, "SELECT nickname FROM Users WHERE nickname = $1", nickname)        
         defer rows.Close()
         if err != nil {
             return false, err
@@ -125,16 +125,15 @@ func (d *Data) AddUserToDatabase(ctx context.Context, user User) error {
 }
 
 func (d *Data) DeleteUserFromDatabase(ctx context.Context, user User) error {
-    defer cancel()
     _, err := d.db.ExecContext(ctx, "DELETE FROM Users WHERE nickname=$1 AND email=$2", user.Nickname, user.Email)
     return err
 }
 
-func (d *Data) GetUsersFromDatabase() ([]User, error) {
+func (d *Data) GetUsersFromDatabase(ctx context.Context) ([]User, error) {
     var usersList []User
     jsonData, err := d.cache.Get(ctx, "UsersList") 
     if err == redis.Nil {
-        if usersList, err = d.cacheMiss(); err != nil {
+        if usersList, err = d.cacheMiss(ctx); err != nil {
             return nil, err
         }
     } else if err != nil {
@@ -145,7 +144,7 @@ func (d *Data) GetUsersFromDatabase() ([]User, error) {
     return usersList
 }
 
-func (d *Data) cacheMiss() ([]User, error) {
+func (d *Data) cacheMiss(ctx context.Context) ([]User, error) {
     var usersList []User
     var rows *sql.Rows
     rows, err = d.db.QueryContext(ctx, "SELECT nickname, email FROM Users")

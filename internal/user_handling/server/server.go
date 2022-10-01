@@ -2,12 +2,24 @@ package uh_server
 
 import (
     "context"
+    "strings"
+    "time"
     
     "google.golang.org/grpc"
 
     "github.com/Shopify/sarama"
     pb "github.com/KSpaceer/go_watermelon/internal/user_handling/proto/user_handling_proto"
     "github.com/KSpaceer/go_watermelon/internal/data"
+    sc "github.cim/KSpaceer/go_watermelon/shared_consts"
+)
+
+const (
+    deliveryHour := 12
+    deliveryMinute := 0
+    deliverySecond := 0
+    deliveryInterval time.Duration = 24 * time.Hour
+
+    ctxTimeout time.Duration = 3 * time.Second
 )
 
 type UserHandlingServer struct {
@@ -55,7 +67,7 @@ func (s *UserHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Re
     if err != nil {
         return nil, err
     }
-    err = s.sendEmail(user.Email, key, "ADD")
+    err = s.sendAuthEmail(user.Email, key, "ADD")
     if err != nil {
         return nil, err
     }
@@ -72,7 +84,7 @@ func (s *UserHandlingServer) DeleteUser(ctx context.Context, user *pb.User) (*pb
     if err != nil {
         return nil, err
     }
-    err = s.sendEmail(user, key,  "DELETE")
+    err = s.sendAuthEmail(user, key,  "DELETE")
     if err != nil {
         return nil, err
     }
@@ -80,7 +92,9 @@ func (s *UserHandlingServer) DeleteUser(ctx context.Context, user *pb.User) (*pb
 }
 
 func (s *UserHandlingServer) ListUsers(stream pb.UserHandling_ListUsersServer) error {
-    usersList, err := s.GetUsersFromDatabase()
+    ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
+    usersList, err := s.GetUsersFromDatabase(ctx)
+    cancel()
     if err != nil {
         return err
     }
@@ -92,12 +106,52 @@ func (s *UserHandlingServer) ListUsers(stream pb.UserHandling_ListUsersServer) e
     return nil
 }
 
-func (s *UserHandlingServer) sendEmail(email, method string) error {
+func (s *UserHandlingServer) sendAuthEmail(authInfo ...string) error {
     msg := &sarama.ProducerMessage{
-        Topic: "auth"
-        Value: sarama.StringEncoder(email + " " + method)
+        Topic: sc.AuthTopic,
+        Value: sarama.StringEncoder(strings.Join(authInfo, " "))
     }
     _, _, err := s.SendMessage(msg) // TODO: add partition and offset for logging
     return err
+}
+
+func (s *UserHandlingServer) sendDailyEmail(user data.User) error {
+    msg := &sarama.ProducerMessage{
+        Topic: sc.DailyDeliveryTopic,
+        Value: sarama.StringEncoder(user.Email + " " + user.Nickname)
+    }
+    _, _, err := s.SendMessage(msg) // TODO: look 6 rows higher
+    return err
+}
+    
+
+func (s *UserHandlingServer) DailyDelivery(errChan chan<- error) {
+    curTime := time.Now()
+    deliveryTime := time.Date(curTime.Year(), curTime.Month(), curTime.Day(), deliveryHour,
+                                deliveryMinute, deliverySecond, 0, curTime.Location())
+    for deliveryTime.Before(curTime) {
+        deliveryTime.Add(deliveryInterval)
+    }
+    waitTimer := time.NewTimer(deliveryTime.Sub(curTime))
+    <-waitTimer.C
+    ticker := time.NewTicker(deliveryInterval)
+    defer ticker.Stop()
+    for {
+        <-ticker.C
+        ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
+        usersList, err := s.GetUsersFromDatabase(ctx)
+        cancel()
+        if err != nil {
+            errChan <- err
+        }
+        for _, user := range usersList {
+            go func(user data.User) {
+                err := s.sendDailyEmail(user) 
+                if err != nil {
+                    errChan <- err
+                }
+            }(user)
+        }
+    }
 }
 
