@@ -11,7 +11,7 @@ import (
 
     "github.com/Shopify/sarama"
 
-    sc "github.com/KSpaceer/go_watermelon/shared_consts"
+    sc "github.com/KSpaceer/go_watermelon/internal/shared_consts"
 )
 
 const (

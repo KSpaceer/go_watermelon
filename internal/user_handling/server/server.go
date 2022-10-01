@@ -8,9 +8,9 @@ import (
     "google.golang.org/grpc"
 
     "github.com/Shopify/sarama"
-    pb "github.com/KSpaceer/go_watermelon/internal/user_handling/proto/user_handling_proto"
+    pb "github.com/KSpaceer/go_watermelon/internal/user_handling/proto"
     "github.com/KSpaceer/go_watermelon/internal/data"
-    sc "github.cim/KSpaceer/go_watermelon/shared_consts"
+    sc "github.com/KSpaceer/go_watermelon/internal/shared_consts"
 )
 
 const (
