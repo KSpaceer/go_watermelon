@@ -21,6 +21,42 @@ const (
     dailyDeliveryMethodName = "sendWatermelon"
 )
 
+var (
+    msgTemplates = map[string]string{
+        "ADD" : `<html>
+                    <head>
+                        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+                        <title>Watermelon delivery</title>
+                    </head>
+                    <body>
+                        <p>Hi! This is confirm message for subscribing to watermelon photo daily delivery service.</p>
+                        <p>If you didn't try to subscribe, ignore this message.</p>
+                        <p>Otherwise, <a href="{host}/v1/auth/%s">click here</a></p>
+                    </body>
+                </html>`,
+        "DELETE" : `<html>
+                    <head>
+                        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+                        <title>Watermelon delivery</title>
+                    </head>
+                    <body>
+                        <p>Hi! This is confirm message for unsubscribing from watermelon photo daily delivery service.</p>
+                        <p>If you didn't try to unsubscribe, ignore this message.</p>
+                        <p>Otherwise, <a href="{host}/v1/auth/%s">click here</a></p>
+                    </body>
+                </html>`,
+        dailyDeliveryMethodName: `<html>
+                                    <head>
+                                        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+                                        <title>Here comes watermelon</title>
+                                    </head>
+                                    <body>
+                                        <p><b>Have a nice day, %s!</b></p>
+                                        <p><img src="cid:%s" alt="Watermelon" /></p>
+                                    </body>
+                                  </html>`
+)
+
 type EmailServer struct {
     *mail.SMTPServer
     sarama.ConsumerGroup

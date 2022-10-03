@@ -1,16 +1,34 @@
 syntax = "proto3";
 
 import "google/protobuf/empty.proto";
+import "google/api/annotations.proto";
 
 option go_package = "github.com/KSpaceer/go_watermelon/user_handling/user_handling_proto";
 
 package user_handling_proto;
 
 service UserHandling {
-    rpc addUser(User) returns (Response) {}
-    rpc deleteUser(User) returns (Response) {}
-    rpc authUser(Key) returns (Response) {}
-    rpc listUsers(google.protobuf.Empty) returns (stream User) {}
+    rpc addUser(User) returns (Response) {
+        option (google.api.http) = {
+            post: "/v1/users"
+            body: "*"
+        };
+    }
+    rpc deleteUser(User) returns (Response) {
+        option (google.api.http) = {
+            delete: "/v1/users/{nickname}"
+        };
+    }
+    rpc authUser(Key) returns (Response) {
+        option (google.api.http) = {
+            get: "/v1/auth/{key}"
+        };
+    }
+    rpc listUsers(google.protobuf.Empty) returns (stream User) {
+        option (google.api.http) = {
+            get: "/v1/users"
+        };
+    }
 }
 
 message User {
