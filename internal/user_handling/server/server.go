@@ -42,6 +42,11 @@ func NewUserHandlingServer(redisAddress, pgsInfoFile string, brokersAddresses []
     return s, nil
 }
 
+func (s *UserHandlingServer) Disconnect() {
+    s.Data.Disconnect()
+    s.SyncProducer.Close()
+}
+
 func (s *UserHandlingServer) AuthUser(ctx context.Context, key *pb.Key) (*pb.Response, error) {
     operation, err := s.GetOperation(ctx, key) 
     if err != nil {

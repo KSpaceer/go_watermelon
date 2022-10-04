@@ -66,6 +66,11 @@ func NewData(redisAddress, pgsInfoFile string) (*Data, error) {
     return d, nil
 }
 
+func (d *Data) Disconnect() {
+    d.db.Close()
+    d.cache.Close()
+}
+
 func (d *Data) GetOperation(ctx context.Context, key string) (Operation, error) {
     jsonData, err := d.cache.Get(ctx, key).Result()
     if err != nil {

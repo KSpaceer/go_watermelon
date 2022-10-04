@@ -19,6 +19,8 @@ const (
     watermelonsDir = "./img"    
     watermelonImgMailName = "watermelon"
     dailyDeliveryMethodName = "sendWatermelon"
+    authMsgSubjectName = "Confirm action"
+    dailyMsgSubjectName = "Daily watermelon"
 )
 
 var (
@@ -54,12 +56,15 @@ var (
                                         <p><b>Have a nice day, %s!</b></p>
                                         <p><img src="cid:%s" alt="Watermelon" /></p>
                                     </body>
-                                  </html>`
+                                  </html>`}
+
+    domainName = ""
 )
 
 type EmailServer struct {
     *mail.SMTPServer
     sarama.ConsumerGroup
+    connLimiter chan struct{}
 }
 
 func NewEmailServer(emailInfoFilePath string, brokersAddresses []string) (*EmailServer, error) {
@@ -73,11 +78,23 @@ func NewEmailServer(emailInfoFilePath string, brokersAddresses []string) (*Email
     if err != nil {
         return nil, err
     }
-    return s, nil 
+    s.connLimiter = make(chan struct{}, maxConns)
+    return s, nil
 }
 
-func (s *EmailServer) SubscribeToTopics(ctx context.Context, topics []string) error {
-    return s.Consume(ctx, topics, s)
+func (s *EmailServer) Disconnect() {
+    s.ConsumerGroup.Close()
+}
+
+func (s *EmailServer) SubscribeToTopics (ctx context.Context) error {
+    for {
+        if err := s.Consume(ctx, []string{sc.AuthTopic, sc.DailyDeliveryTopic}, s); err != nil {
+            return err
+        }
+        if ctx.Err() != nil {
+            return nil
+        }
+    }
 }
 
 func readEmailInfoFile(s *EmailServer, emailInfoFilePath string) error {
@@ -120,6 +137,7 @@ func (s *EmailServer) SendAuthMessage(email, key, method string) error {
     if err != nil {
         return err
     }
+    defer client.Close()
     msg := mail.NewMSG()
     msg.AddTo(email).SetSubject("Confirm action")
     msgBody := makeAuthMessage(key, method)
@@ -147,8 +165,9 @@ func (s *EmailServer) SendDailyMessage(email, nickname string) error {
     if err != nil {
         return err
     }
+    defer client.Close()
     msg := mail.NewMSG()
-    msg.AddTo(email).SetSubject("Daliy watermelon").SetListUnsubscribe() // TODO: List Unsubscribe
+    msg.AddTo(email).SetSubject(dailyMsgSubjectName).SetListUnsubscribe()
     attachedFileName := watermelonImgMailName + filepath.Ext(imgPath)
     msg.Attach(&mail.File{FilePath: imgPath, Name: attachedFileName})
     msgBody := makeDailyMessage(nickname, attachedFileName)
@@ -188,22 +207,21 @@ func (s *EmailServer) Cleanup(session sarama.ConsumerGroupSession) error {
 }
 
 func (s *EmailServer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-    connLimiter := make(chan struct{}, maxConns)
     for message := range claim.Messages() {
         switch message.Topic {
         case sc.AuthTopic:
             authInfo := strings.Split(string(message.Value), " ")
             go func() {
-                connLimiter <- struct{}{}
-                s.SendAuthMessage(authInfo[0], authInfo[1], authInfo[2]) // TODO error channel
-                <-connLimiter
+                s.connLimiter <- struct{}{}
+                s.SendAuthMessage(authInfo[0], authInfo[1], authInfo[2]) // TODO error channel/logger
+                <-s.connLimiter
             }
         case sc.DailyDeliveryTopic:
             userInfo := strings.Split(string(message.Value), " ")
             go func() {
-                connLimiter <- struct{}{}
+                s.connLimiter <- struct{}{}
                 s.SendDailyMessage(userInfo[0], userInfo[1])
-                <-connLimiter
+                <-s.connLimiter
             }
         }
         session.MarkMessage(message, "")

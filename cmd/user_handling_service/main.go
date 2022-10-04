@@ -3,6 +3,7 @@ package main
 import (
     "flag"
     "strings"
+    "log"
     "net"
 
     "google.golang.org/grpc"
@@ -25,6 +26,7 @@ func main() {
     if err != nil {
         log.Fatalf("Failed to create a server instance: %v", err) // TODO: replace with advanced logger
     }
+    defer uhServer.Disconnect()
     lis, err := net.Listen("tcp", *grpcServerEndpoint)  
     if err != nil {
         log.Fatalf("Failed to listen: %v", err)
