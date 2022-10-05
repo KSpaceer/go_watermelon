@@ -17,6 +17,9 @@ service UserHandling {
     rpc deleteUser(User) returns (Response) {
         option (google.api.http) = {
             delete: "/v1/users/{nickname}"
+            additional_bindings: {
+                get: "/v1/unsubscribe/{nickname}"
+            }
         };
     }
     rpc authUser(Key) returns (Response) {

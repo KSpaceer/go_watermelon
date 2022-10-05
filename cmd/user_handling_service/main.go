@@ -9,6 +9,7 @@ import (
     "google.golang.org/grpc"
     "google.golang.org/grpc/credentials/insecure"
 
+    "github.com/KSpaceer/go_watermelon/internal/data"
     pb "github.com/KSpaceer/go_watermelon/internal/user_handling/proto"
     uhs "github.com/KSpaceer/go_watermelon/internal/user_handling/server"
 )
@@ -22,11 +23,15 @@ var (
 
 func main() {
     flag.Parse()
-    uhServer, err := uhs.NewUserHandlingServer(*redisAddr, *pgsInfoFilePath, strings.Split(*messageBrokerAddrs, ","))
+    dataHandler, err := data.NewPGSRedisData(*redisAddr, *pgsInfoFilePath) 
     if err != nil {
-        log.Fatalf("Failed to create a server instance: %v", err) // TODO: replace with advanced logger
+        log.Fatalf("Failed to create a database handler: %v", err)
     }
-    defer uhServer.Disconnect()
+    mbProducer, err := sarama.NewSyncProducer(strings.Split(*messageBrokerAddrs, ","), sarama.NewConfig())
+    if err != nil {
+        log.Fatalf("Failed to create a message brocker producer: %v", err)
+    }
+    uhServer := uhs.NewUserHandlingServer(dataHandler, mbProducer)
     lis, err := net.Listen("tcp", *grpcServerEndpoint)  
     if err != nil {
         log.Fatalf("Failed to listen: %v", err)

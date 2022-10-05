@@ -6,6 +6,7 @@ import (
     "path/filepath"
     "strings"
     "math/rand"
+    "net"
 
     "github.com/xhit/go-simple-mail/v2"
 
@@ -58,19 +59,19 @@ var (
                                     </body>
                                   </html>`}
 
-    domainName = ""
 )
 
 type EmailServer struct {
     *mail.SMTPServer
     sarama.ConsumerGroup
     connLimiter chan struct{}
+    mainServiceLocation string
 }
 
-func NewEmailServer(emailInfoFilePath string, brokersAddresses []string) (*EmailServer, error) {
+func NewEmailServer(emailInfoFilePath, mainServiceLocation string, brokersAddresses []string) (*EmailServer, error) {
     s := &EmailServer{}
     s.SMTPServer = mail.NewSMTPClient()
-    err := readEmailInfoFile(s, emailInfoFilePath)
+    err := s.readEmailInfoFile(emailInfoFilePath)
     if err != nil {
         return nil, err
     }
@@ -78,6 +79,7 @@ func NewEmailServer(emailInfoFilePath string, brokersAddresses []string) (*Email
     if err != nil {
         return nil, err
     }
+    s.mainServiceLocation, err = s.defineMainServiceLocation(mainServiceLocation)
     s.connLimiter = make(chan struct{}, maxConns)
     return s, nil
 }
@@ -97,7 +99,25 @@ func (s *EmailServer) SubscribeToTopics (ctx context.Context) error {
     }
 }
 
-func readEmailInfoFile(s *EmailServer, emailInfoFilePath string) error {
+func (s *EmailServer) defineMainServiceLocation(mainServiceLocation string) (string, error) {
+    if strings.HasPrefix(mainServiceLocation, "localhost") {
+        interfaceAddresses, err = net.InterfaceAddrs()
+        if err != nil {
+            return "", err
+        }
+        for _, interfaceAddr := range interfaceAddresses {
+            networkIP, ok := interfaceAddr.(*net.IPNet)
+            if ok && !networkIP.IP.IsLoopback() && networkIP.IP.To4() != nil {
+                ip := networkIP.IP.String()
+                return "http://" + ip + strings.TrimPrefix(mainServiceLocation, "localhost") + "/", nil
+            }
+        }
+        return "", fmt.Errorf("Main service is supposed to be ran on localhost, but there is no external IP.")
+    }
+    return mainServiceLocation, nil
+}
+
+func (s *EmailServer) readEmailInfoFile(emailInfoFilePath string) error {
     if !filepath.IsAbs(emailInfoFilePath) {
         emailInfoFilePath, err = filepath.Abs(emailInfoFilePath)
         if err != nil {
@@ -152,12 +172,12 @@ func (s *EmailServer) SendAuthMessage(email, key, method string) error {
     return nil
 }
 
-func makeAuthMessage(key, method string) string {
+func (s *EmailServer) makeAuthMessage(key, method string) string {
    return fmt.Sprintf(msgTemplates[method], key) 
 }
 
 func (s *EmailServer) SendDailyMessage(email, nickname string) error {
-    imgPath, err := chooseRandomImg()
+    imgPath, err := s.chooseRandomImg()
     if err != nil {
         return err
     }
@@ -167,10 +187,10 @@ func (s *EmailServer) SendDailyMessage(email, nickname string) error {
     }
     defer client.Close()
     msg := mail.NewMSG()
-    msg.AddTo(email).SetSubject(dailyMsgSubjectName).SetListUnsubscribe()
+    msg.AddTo(email).SetSubject(dailyMsgSubjectName).SetListUnsubscribe(strings.Join([]string{"<", s.mainServiceLocation, "v1/unsubscribe/", nickname, ">"}, ""))
     attachedFileName := watermelonImgMailName + filepath.Ext(imgPath)
     msg.Attach(&mail.File{FilePath: imgPath, Name: attachedFileName})
-    msgBody := makeDailyMessage(nickname, attachedFileName)
+    msgBody := s.makeDailyMessage(nickname, attachedFileName)
     msg.SetBody(mail.TextHTML, msgBody)
     if email.Error != nil {
         return email.Error
@@ -182,7 +202,7 @@ func (s *EmailServer) SendDailyMessage(email, nickname string) error {
     return nil
 }
 
-func chooseRandomImg() (string, error) {
+func (s *EmailServer) chooseRandomImg() (string, error) {
     images, err := os.ReadDir(watermelonsDir)
     if err != nil {
         return "", err
@@ -194,7 +214,7 @@ func chooseRandomImg() (string, error) {
     return filepath.Join(watermelonsDir, selectedFile), nil
 }
 
-func makeDailyMessage(nickname, filename string) string {
+func (s *EmailServer) makeDailyMessage(nickname, filename string) string {
     return fmt.Sprintf(msgTemplates[dailyDeliveryMethodName], nickname, filename)
 }
 

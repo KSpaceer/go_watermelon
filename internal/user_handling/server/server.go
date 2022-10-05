@@ -2,8 +2,10 @@ package uh_server
 
 import (
     "context"
+    "fmt"
     "strings"
     "time"
+    "net/mail"
     
     "google.golang.org/grpc"
 
@@ -24,22 +26,12 @@ const (
 
 type UserHandlingServer struct {
     pb.UnimplementedUserHandlingServer
-    *data.Data
+    data.Data
     sarama.SyncProducer
 }
 
-func NewUserHandlingServer(redisAddress, pgsInfoFile string, brokersAddresses []string) (*userHandlingServer, error) {
-    s := &UserHandlingServer{}
-    var err error
-    s.Data, err = data.NewData(redisAddress, pgsInfoFile)
-    if err != nil {
-        return nil, err
-    }
-    s.SyncProducer, err = sarama.NewSyncProducer(brokersAddresses, sarama.NewConfig())
-    if err != nil {
-        return nil, err
-    }
-    return s, nil
+func NewUserHandlingServer(dataHandler data.Data, producer sarama.SyncProducer) (*UserHandlingServer) {
+    return &UserHandlingServer{Data: dataHandler, SyncProducer: producer}
 }
 
 func (s *UserHandlingServer) Disconnect() {
@@ -53,20 +45,26 @@ func (s *UserHandlingServer) AuthUser(ctx context.Context, key *pb.Key) (*pb.Res
         return nil, err
     }
     if operation.Method == "ADD" {
-        s.AddUserToDatabase(ctx, operation.User)
+        err = s.AddUserToDatabase(ctx, operation.User)
     } else if operation.Method == "DELETE" {
-        s.DeleteUserFromDatabase(ctx, operation.User)
+        err = s.DeleteUserFromDatabase(ctx, operation.User)
     } else {
-        return &pb.Response{Message: "Wrong key."}, nil
+        return nil, fmt.Errorf("Wrong key.")
     }
-    return &pb.Response{Message: "OK"}, nil
+    if err != nil {
+        return nil, err
+    }
+    return &pb.Response{Message: fmt.Sprintf("Method %s was executed successfully.", operation.Method)}, nil
 }
 
 func (s *UserHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Response, error) {
     if ok, err := s.CheckNicknameInDatabase(ctx, user.Nickname); err != nil {
         return nil, err
     } else if ok {
-        return &pb.Response{Message: "User with this nickname is already exists."}, nil
+        return nil, fmt.Errorf("User with this nickname already exists.")
+    }
+    if _, err := mail.ParseAddress(user.Email); err != nil {
+        return nil, fmt.Errorf("Invalid email.")
     }
     key, err := s.SetOperation(ctx, data.User{user.Nickname, user.Email}, "ADD")
     if err != nil {
@@ -76,14 +74,14 @@ func (s *UserHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Re
     if err != nil {
         return nil, err
     }
-    return &pb.Response{Message: "OK"}, nil
+    return &pb.Response{Message: "Auth email is sent."}, nil
 }
 
 func (s *UserHandlingServer) DeleteUser(ctx context.Context, user *pb.User) (*pb.Response, error) {
     if ok, err := s.CheckNicknameInDatabase(ctx, user.Nickname); err != nil {
         return nil, err
     } else if !ok {
-        return &pb.Response{Message: "There is no user with such nickname."}, nil
+        return nil, fmt.Errorf("There is no user with such nickname.")
     }
     key, err := s.SetOperation(ctx, data.User{user.Nickname, user.Email}, "DELETE")
     if err != nil {
@@ -93,7 +91,7 @@ func (s *UserHandlingServer) DeleteUser(ctx context.Context, user *pb.User) (*pb
     if err != nil {
         return nil, err
     }
-    return &pb.Response{Message: "OK"}, nil
+    return &pb.Response{Message: "Auth email is sent."}, nil
 }
 
 func (s *UserHandlingServer) ListUsers(stream pb.UserHandling_ListUsersServer) error {
