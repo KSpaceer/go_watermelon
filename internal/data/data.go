@@ -20,11 +20,12 @@ const (
     keySize = 128
     authExpiration time.Duration = 15 * time.Minute
     cacheExpiration time.Duration = time.Minute
+    ListUsersKey = "UsersList"
 )
 
 type Data interface {
     Disconnect()
-    GetOperation(ctx context.Context, key string) (Operation, error)
+    GetOperation(ctx context.Context, key string) (*Operation, error)
     SetOperation(ctx context.Context, user User, method string) (string, error)
     CheckNicknameInDatabase(ctx context.Context, nickname string) (bool, error)
     AddUserToDatabase(ctx context.Context, user User) error
@@ -132,12 +133,13 @@ func (d *postgresRedisData) CheckNicknameInDatabase(ctx context.Context, nicknam
     result, err := d.cache.Get(ctx, nickname).Bool()
     if err == redis.Nil {
         rows, err := d.db.QueryContext(ctx, "SELECT nickname FROM Users WHERE nickname = $1", nickname)        
-        defer rows.Close()
         if err != nil {
             return false, err
         }
+        defer rows.Close()
         result = rows.Next()
-        _ = d.cache.Set(ctx, nickname, result, cacheExpiration)
+        d.cache.Set(ctx, nickname, result, cacheExpiration)
+        return result, nil
     } else if err != nil {
         return false, err
     }
@@ -145,18 +147,24 @@ func (d *postgresRedisData) CheckNicknameInDatabase(ctx context.Context, nicknam
 }
 
 func (d *postgresRedisData) AddUserToDatabase(ctx context.Context, user User) error {
-    _, err := d.db.ExecContext(ctx, "INSERT INTO Users VALUES ($1, $2)", user.Nickname, user.Email)
+    result, err := d.db.ExecContext(ctx, "INSERT INTO Users VALUES ($1, $2)", user.Nickname, user.Email)
+    if rows, err := result.RowsAffected(); err == nil && rows > 0 {
+        d.cache.Del(ctx, ListUsersKey)
+    }
     return err
 }
 
 func (d *postgresRedisData) DeleteUserFromDatabase(ctx context.Context, user User) error {
-    _, err := d.db.ExecContext(ctx, "DELETE FROM Users WHERE nickname=$1 AND email=$2", user.Nickname, user.Email)
+    result, err := d.db.ExecContext(ctx, "DELETE FROM Users WHERE nickname=$1 AND email=$2", user.Nickname, user.Email)
+    if rows, err := result.RowsAffected(); err == nil && rows > 0 {
+        d.cache.Del(ctx, ListUsersKey)
+    }
     return err
 }
 
 func (d *postgresRedisData) GetUsersFromDatabase(ctx context.Context) ([]User, error) {
     var usersList []User
-    jsonData, err := d.cache.Get(ctx, "UsersList").Result()
+    jsonData, err := d.cache.Get(ctx, ListUsersKey).Result()
     if err == redis.Nil {
         if usersList, err = d.cacheMiss(ctx); err != nil {
             return nil, err
@@ -190,7 +198,7 @@ func (d *postgresRedisData) cacheMiss(ctx context.Context) ([]User, error) {
     if err := json.NewEncoder(buf).Encode(&usersList); err != nil {
         return nil, err
     }
-    if err := d.cache.Set(ctx, "UsersList", buf.String(), cacheExpiration).Err(); err != nil {
+    if err := d.cache.Set(ctx, ListUsersKey, buf.String(), cacheExpiration).Err(); err != nil {
         return nil, err
     }
     return usersList, nil 

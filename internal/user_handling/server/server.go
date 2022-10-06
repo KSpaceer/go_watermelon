@@ -7,8 +7,6 @@ import (
     "time"
     "net/mail"
     
-    "google.golang.org/grpc"
-
     "github.com/Shopify/sarama"
     pb "github.com/KSpaceer/go_watermelon/internal/user_handling/proto"
     "github.com/KSpaceer/go_watermelon/internal/data"
@@ -16,9 +14,9 @@ import (
 )
 
 const (
-    deliveryHour := 12
-    deliveryMinute := 0
-    deliverySecond := 0
+    deliveryHour = 12
+    deliveryMinute = 0
+    deliverySecond = 0
     deliveryInterval time.Duration = 24 * time.Hour
 
     ctxTimeout time.Duration = 3 * time.Second
@@ -40,7 +38,7 @@ func (s *UserHandlingServer) Disconnect() {
 }
 
 func (s *UserHandlingServer) AuthUser(ctx context.Context, key *pb.Key) (*pb.Response, error) {
-    operation, err := s.GetOperation(ctx, key) 
+    operation, err := s.GetOperation(ctx, key.Key) 
     if err != nil {
         return nil, err
     }
@@ -87,7 +85,7 @@ func (s *UserHandlingServer) DeleteUser(ctx context.Context, user *pb.User) (*pb
     if err != nil {
         return nil, err
     }
-    err = s.sendAuthEmail(user, key,  "DELETE")
+    err = s.sendAuthEmail(user.Email, key,  "DELETE")
     if err != nil {
         return nil, err
     }
@@ -112,7 +110,7 @@ func (s *UserHandlingServer) ListUsers(stream pb.UserHandling_ListUsersServer) e
 func (s *UserHandlingServer) sendAuthEmail(authInfo ...string) error {
     msg := &sarama.ProducerMessage{
         Topic: sc.AuthTopic,
-        Value: sarama.StringEncoder(strings.Join(authInfo, " "))
+        Value: sarama.StringEncoder(strings.Join(authInfo, " ")),
     }
     _, _, err := s.SendMessage(msg) // TODO: add partition and offset for logging
     return err
@@ -121,7 +119,7 @@ func (s *UserHandlingServer) sendAuthEmail(authInfo ...string) error {
 func (s *UserHandlingServer) sendDailyEmail(user data.User) error {
     msg := &sarama.ProducerMessage{
         Topic: sc.DailyDeliveryTopic,
-        Value: sarama.StringEncoder(user.Email + " " + user.Nickname)
+        Value: sarama.StringEncoder(user.Email + " " + user.Nickname),
     }
     _, _, err := s.SendMessage(msg) // TODO: look 6 rows higher
     return err

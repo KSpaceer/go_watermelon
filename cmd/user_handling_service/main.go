@@ -38,5 +38,6 @@ func main() {
     }
     grpcServer := grpc.NewServer() 
     pb.RegisterUserHandlingServer(grpcServer, uhServer)
+    //TODO: add daily delivery
     log.Fatal(grpcServer.Serve(lis))
 }
