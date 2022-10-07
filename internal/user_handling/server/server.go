@@ -4,6 +4,7 @@ import (
     "context"
     "fmt"
     "strings"
+    "sync"
     "time"
     "net/mail"
     
@@ -124,9 +125,30 @@ func (s *UserHandlingServer) sendDailyEmail(user data.User) error {
     _, _, err := s.SendMessage(msg) // TODO: look 6 rows higher
     return err
 }
-    
 
-func (s *UserHandlingServer) DailyDelivery(errChan chan<- error) {
+func (s *UserHandlingServer) SendDailyMessagesToAllUsers(errChan chan<- error) {
+    ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
+    usersList, err := s.GetUsersFromDatabase(ctx)
+    cancel()
+    if err != nil {
+        errChan <- err
+        return
+    }
+    wg := new(sync.WaitGroup)
+    wg.Add(len(usersList))
+    for _, user := range usersList {
+        go func(user data.User) {
+            defer wg.Done()
+            err := s.sendDailyEmail(user) 
+            if err != nil {
+                errChan <- err
+            }
+        }(user)
+    }
+    wg.Wait()
+}
+
+func (s *UserHandlingServer) DailyDelivery(cancelChan <-chan struct{}, errChan chan<- error) {
     curTime := time.Now()
     deliveryTime := time.Date(curTime.Year(), curTime.Month(), curTime.Day(), deliveryHour,
                                 deliveryMinute, deliverySecond, 0, curTime.Location())
@@ -134,24 +156,23 @@ func (s *UserHandlingServer) DailyDelivery(errChan chan<- error) {
         deliveryTime.Add(deliveryInterval)
     }
     waitTimer := time.NewTimer(deliveryTime.Sub(curTime))
-    <-waitTimer.C
+    outer:
+    for {
+        select {
+        case <-waitTimer.C:
+            break outer
+        case <-cancelChan:
+            return
+        }
+    }
     ticker := time.NewTicker(deliveryInterval)
     defer ticker.Stop()
     for {
-        <-ticker.C
-        ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
-        usersList, err := s.GetUsersFromDatabase(ctx)
-        cancel()
-        if err != nil {
-            errChan <- err
-        }
-        for _, user := range usersList {
-            go func(user data.User) {
-                err := s.sendDailyEmail(user) 
-                if err != nil {
-                    errChan <- err
-                }
-            }(user)
+        select {
+        case <-ticker.C:
+            s.SendDailyMessagesToAllUsers(errChan)         
+        case <-cancelChan:
+            return
         }
     }
 }

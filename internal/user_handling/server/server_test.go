@@ -3,6 +3,7 @@ package uh_server_test
 import (
     "context"
     "fmt"
+    "math/rand"
     "testing"
     "time"
     "strings"
@@ -173,6 +174,19 @@ func TestAddUserExists(t *testing.T) {
     assert.NotNil(t, err)
 }
 
+func TestAddUserInvalidEmail(t *testing.T) {
+    mockData := new(MockData)
+    uhServer := uh.NewUserHandlingServer(mockData, nil)
+    testUser := &pb.User{Nickname:"Newbie", Email: "idontknowwhatemailis"}
+    ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
+    defer cancel()
+    mockData.On("CheckNicknameInDatabase", ctx, testUser.Nickname).Return(false, nil)
+    response, err := uhServer.AddUser(ctx, testUser)
+    mockData.AssertExpectations(t)
+    assert.Nil(t, response)
+    assert.NotNil(t, err)
+}
+
 func TestDeleteUserExists(t *testing.T) {
     mockProducer := saramamock.NewSyncProducer(t, sarama.NewConfig())
     mockData := new(MockData)
@@ -213,3 +227,34 @@ func TestDeleteUserNotExists(t *testing.T) {
     assert.Nil(t, response)
     assert.NotNil(t, err)
 }
+
+func TestDailyMessagesToAllUsers(t *testing.T) {
+    mockData := new(MockData)
+    mockProducer := saramamock.NewSyncProducer(t, sarama.NewConfig())
+    uhServer := uh.NewUserHandlingServer(mockData, mockProducer)
+    testUsers := []data.User{{"pupa", "buhga@example.com"}, {"lupa", "lteria@gmail.com"}}
+    mockData.On("GetUsersFromDatabase", mock.Anything).Return(testUsers, nil)
+    rand.Seed(time.Now().UnixNano())
+    expectedFailCount := 0 
+    for i := 0; i < len(testUsers); i++ {
+        if rand.Intn(5) == 0 {
+            mockProducer.ExpectSendMessageAndFail(fmt.Errorf("FAIL"))
+            expectedFailCount++
+        } else {
+            mockProducer.ExpectSendMessageAndSucceed()
+        }
+    }
+    errChan := make(chan error)
+    go func() {
+        count := 0
+        defer func(){assert.Equal(t, count, expectedFailCount)}()
+        for i := 0; i < expectedFailCount; i++ {
+            <-errChan
+            count++
+        }
+    }()
+    uhServer.SendDailyMessagesToAllUsers(errChan)
+    mockData.AssertExpectations(t)
+}
+
+
