@@ -1,10 +1,13 @@
 package email_server
 
 import (
+    "context"
     "encoding/csv"
     "fmt"
     "path/filepath"
     "strings"
+    "strconv"
+    "os"
     "math/rand"
     "net"
 
@@ -17,11 +20,12 @@ import (
 
 const (
     maxConns = 10
-    watermelonsDir = "./img"    
+    watermelonsDir = "../../../img"    
     watermelonImgMailName = "watermelon"
     dailyDeliveryMethodName = "sendWatermelon"
     authMsgSubjectName = "Confirm action"
     dailyMsgSubjectName = "Daily watermelon"
+    emailInfoFieldAmount = 4
 )
 
 var (
@@ -101,7 +105,7 @@ func (s *EmailServer) SubscribeToTopics (ctx context.Context) error {
 
 func (s *EmailServer) defineMainServiceLocation(mainServiceLocation string) (string, error) {
     if strings.HasPrefix(mainServiceLocation, "localhost") {
-        interfaceAddresses, err = net.InterfaceAddrs()
+        interfaceAddresses, err := net.InterfaceAddrs()
         if err != nil {
             return "", err
         }
@@ -118,6 +122,7 @@ func (s *EmailServer) defineMainServiceLocation(mainServiceLocation string) (str
 }
 
 func (s *EmailServer) readEmailInfoFile(emailInfoFilePath string) error {
+    var err error
     if !filepath.IsAbs(emailInfoFilePath) {
         emailInfoFilePath, err = filepath.Abs(emailInfoFilePath)
         if err != nil {
@@ -125,16 +130,18 @@ func (s *EmailServer) readEmailInfoFile(emailInfoFilePath string) error {
         }
     }
     emailInfoFile, err := os.Open(emailInfoFilePath)
-    defer emailInfoFile.Close()
     if err != nil {
         return err
     }
+    defer emailInfoFile.Close()
     csvReader := csv.NewReader(emailInfoFile)
     emailInfo, err := csvReader.ReadAll()
     if err != nil {
         return err
     }
+    infoCount := 0
     for i := range emailInfo[0] {
+        infoCount++
         switch emailInfo[0][i] {
         case "Host":
             s.SMTPServer.Host = emailInfo[1][i]
@@ -147,7 +154,12 @@ func (s *EmailServer) readEmailInfoFile(emailInfoFilePath string) error {
             s.SMTPServer.Username = emailInfo[1][i]
         case "Password":
             s.SMTPServer.Password = emailInfo[1][i]
+        default:
+            infoCount--
         }
+    }
+    if infoCount != emailInfoFieldAmount {
+        return fmt.Errorf("Invalid file %q: expected %d fields of info to parse, got %d.", emailInfoFilePath, emailInfoFieldAmount, infoCount)
     }
     return nil
 }
@@ -160,12 +172,12 @@ func (s *EmailServer) SendAuthMessage(email, key, method string) error {
     defer client.Close()
     msg := mail.NewMSG()
     msg.AddTo(email).SetSubject("Confirm action")
-    msgBody := makeAuthMessage(key, method)
+    msgBody := s.makeAuthMessage(key, method)
     msg.SetBody(mail.TextHTML, msgBody)
-    if email.Error != nil {
-        return email.Error
+    if msg.Error != nil {
+        return msg.Error
     }
-    err = email.Send(client)
+    err = msg.Send(client)
     if err != nil {
         return err
     }
@@ -192,10 +204,10 @@ func (s *EmailServer) SendDailyMessage(email, nickname string) error {
     msg.Attach(&mail.File{FilePath: imgPath, Name: attachedFileName})
     msgBody := s.makeDailyMessage(nickname, attachedFileName)
     msg.SetBody(mail.TextHTML, msgBody)
-    if email.Error != nil {
-        return email.Error
+    if msg.Error != nil {
+        return msg.Error
     }
-    err = email.Send(client)
+    err = msg.Send(client)
     if err != nil {
         return err
     }
@@ -209,9 +221,13 @@ func (s *EmailServer) chooseRandomImg() (string, error) {
     }
     selectedFile := images[rand.Intn(len(images))]
     for selectedFile.IsDir() {
-        selectedFile := images[rand.Intn(len(images))]
+        selectedFile = images[rand.Intn(len(images))]
     }
-    return filepath.Join(watermelonsDir, selectedFile), nil
+    result, err := filepath.Abs(filepath.Join(watermelonsDir, selectedFile.Name()))
+    if err != nil {
+        return "", nil
+    }
+    return result, nil
 }
 
 func (s *EmailServer) makeDailyMessage(nickname, filename string) string {
@@ -235,14 +251,14 @@ func (s *EmailServer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sa
                 s.connLimiter <- struct{}{}
                 s.SendAuthMessage(authInfo[0], authInfo[1], authInfo[2]) // TODO error channel/logger
                 <-s.connLimiter
-            }
+            }()
         case sc.DailyDeliveryTopic:
             userInfo := strings.Split(string(message.Value), " ")
             go func() {
                 s.connLimiter <- struct{}{}
                 s.SendDailyMessage(userInfo[0], userInfo[1])
                 <-s.connLimiter
-            }
+            }()
         }
         session.MarkMessage(message, "")
     }
