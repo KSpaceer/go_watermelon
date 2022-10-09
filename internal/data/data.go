@@ -80,10 +80,10 @@ func NewPGSRedisData(redisAddress, pgsInfoFile string) (*postgresRedisData, erro
 }
 
 func (d *postgresRedisData) createUsersTable() error {
-    _, err := d.db.Exec(`CREATE TABLE IF NOT EXISTS Users (nickname TEXT, email TEXT);`)
-    if err == nil {
-        _, err = d.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS nickname_idx ON Users(nickname);`)
-    }
+    _, err := d.db.Exec(`CREATE TABLE IF NOT EXISTS Users (` +
+                        `nickname TEXT,` +
+                        `email TEXT,` +
+                        `UNIQUE (nickname));`)
     return err
 }
 

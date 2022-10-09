@@ -19,8 +19,7 @@ func TestCreateUsersTableSuccess(t *testing.T) {
     if err != nil {
         t.Fatalf("Error \"%v\" was not expected while opening a mock database connection", err)
     }
-    dbMock.ExpectExec(regexp.QuoteMeta(`CREATE TABLE IF NOT EXISTS Users (nickname TEXT, email TEXT);`)).WillReturnError(nil).WillReturnResult(sqlmock.NewResult(1, 1))
-    dbMock.ExpectExec(regexp.QuoteMeta(`CREATE UNIQUE INDEX IF NOT EXISTS nickname_idx ON Users(nickname);`)).WillReturnError(nil).WillReturnResult(sqlmock.NewResult(1, 1))
+    dbMock.ExpectExec(regexp.QuoteMeta(`CREATE TABLE IF NOT EXISTS Users (nickname TEXT,email TEXT,UNIQUE (nickname));`)).WillReturnError(nil).WillReturnResult(sqlmock.NewResult(1, 1))
     d := &postgresRedisData{}
     d.db = db
     assert.Nil(t, d.createUsersTable())
