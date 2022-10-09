@@ -27,5 +27,5 @@ func main() {
     if err != nil {
         log.Fatalf("Can't register handler from gRPC endpoint: %v", err)
     }
-    log.Fatal(http.ListenAndServe(*httpServerAddr, mux)
+    log.Fatal(http.ListenAndServe(*httpServerAddr, mux))
 }

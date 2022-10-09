@@ -39,5 +39,15 @@ func main() {
     grpcServer := grpc.NewServer() 
     pb.RegisterUserHandlingServer(grpcServer, uhServer)
     //TODO: add daily delivery
-    log.Fatal(grpcServer.Serve(lis))
+    errChan := make(chan error)
+    cancelChan := make(chan struct{})
+    go uhServer.DailyDelivery(cancelChan, errChan)
+    go func() {
+        for {
+            log.Error(<-errChan)
+        }
+    }()
+    err = grpcServer.Serve(lis)
+    cancelChan <- struct{}{}
+    log.Fatal(err)
 }

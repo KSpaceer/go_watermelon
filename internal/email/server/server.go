@@ -10,6 +10,7 @@ import (
     "os"
     "math/rand"
     "net"
+    "net/url"
 
     "github.com/xhit/go-simple-mail/v2"
 
@@ -84,6 +85,12 @@ func NewEmailServer(emailInfoFilePath, mainServiceLocation string, brokersAddres
         return nil, err
     }
     s.mainServiceLocation, err = s.defineMainServiceLocation(mainServiceLocation)
+    if err != nil {
+        return nil, err
+    }
+    for key := range msgTemplates {
+        msgTemplates[key] = strings.Replace(msgTemplates[key], "{host}", s.mainServiceLocation, -1)
+    }
     s.connLimiter = make(chan struct{}, maxConns)
     return s, nil
 }
@@ -117,6 +124,8 @@ func (s *EmailServer) defineMainServiceLocation(mainServiceLocation string) (str
             }
         }
         return "", fmt.Errorf("Main service is supposed to be ran on localhost, but there is no external IP.")
+    } else if _, err := url.ParseRequestURI(mainServiceLocation); err != nil {
+        return "", err
     }
     return mainServiceLocation, nil
 }

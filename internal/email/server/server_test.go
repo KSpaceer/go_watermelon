@@ -8,6 +8,24 @@ import (
     "github.com/stretchr/testify/assert"
 )
 
+func TestDefineMainServiceLocationLocalhost(t *testing.T) {
+    testHost := "localhost"
+    eServer := EmailServer{}
+    addr, err := eServer.defineMainServiceLocation(testHost)
+    if assert.Nil(t, err) {
+        assert.NotEqual(t, testHost, addr)
+    }
+}
+
+func TestDefineMainServiceLocationExternalDomain(t *testing.T) {
+    testHost := "https://example.com"
+    eServer := EmailServer{}
+    addr, err := eServer.defineMainServiceLocation(testHost)
+    if assert.Nil(t, err) {
+        assert.Equal(t, testHost, addr)
+    }
+}
+
 func TestReadEmailInfoFileCorrect(t *testing.T) {
     testFilePath := "testdata/email_info.csv"
     eServer := EmailServer{}
