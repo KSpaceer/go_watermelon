@@ -6,11 +6,15 @@ import (
     "strings"
     "sync"
     "time"
+    "io"
+    "os"
     "net/mail"
     
     "github.com/Shopify/sarama"
+    "github.com/rs/zerolog"
     pb "github.com/KSpaceer/go_watermelon/internal/user_handling/proto"
     "github.com/KSpaceer/go_watermelon/internal/data"
+    "github.com/KSpaceer/go_watermelon/internal/kafkawriter"
     sc "github.com/KSpaceer/go_watermelon/internal/shared_consts"
 )
 
@@ -27,18 +31,22 @@ type UserHandlingServer struct {
     pb.UnimplementedUserHandlingServer
     data.Data
     sarama.SyncProducer
+    zerolog.Logger
 }
 
 func NewUserHandlingServer(dataHandler data.Data, producer sarama.SyncProducer) (*UserHandlingServer) {
-    return &UserHandlingServer{Data: dataHandler, SyncProducer: producer}
+    logger := zerolog.New(io.MultiWriter(os.Stderr, kafkawriter.New(producer))).With().Timestamp().Logger()
+    return &UserHandlingServer{Data: dataHandler, SyncProducer: producer, Logger: logger}
 }
 
 func (s *UserHandlingServer) Disconnect() {
     s.Data.Disconnect()
     s.SyncProducer.Close()
+    s.Info().Msg("User handling server is disconnected from DB and MB.")
 }
 
 func (s *UserHandlingServer) AuthUser(ctx context.Context, key *pb.Key) (*pb.Response, error) {
+    s.Info().Msg("AuthUser method is called.")
     operation, err := s.GetOperation(ctx, key.Key) 
     if err != nil {
         return nil, err
@@ -53,6 +61,7 @@ func (s *UserHandlingServer) AuthUser(ctx context.Context, key *pb.Key) (*pb.Res
     if err != nil {
         return nil, err
     }
+    s.Info().Msg("AuthUser method is executed successfully")
     return &pb.Response{Message: fmt.Sprintf("Method %s was executed successfully.", operation.Method)}, nil
 }
 

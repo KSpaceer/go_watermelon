@@ -39,7 +39,7 @@ var (
                     <body>
                         <p>Hi! This is confirm message for subscribing to watermelon photo daily delivery service.</p>
                         <p>If you didn't try to subscribe, ignore this message.</p>
-                        <p>Otherwise, <a href="{host}/v1/auth/%s">click here</a></p>
+                        <p>Otherwise, <a href="%s/v1/auth/%s">click here</a></p>
                     </body>
                 </html>`,
         "DELETE" : `<html>
@@ -50,7 +50,7 @@ var (
                     <body>
                         <p>Hi! This is confirm message for unsubscribing from watermelon photo daily delivery service.</p>
                         <p>If you didn't try to unsubscribe, ignore this message.</p>
-                        <p>Otherwise, <a href="{host}/v1/auth/%s">click here</a></p>
+                        <p>Otherwise, <a href="%s/v1/auth/%s">click here</a></p>
                     </body>
                 </html>`,
         dailyDeliveryMethodName: `<html>
@@ -87,9 +87,6 @@ func NewEmailServer(emailInfoFilePath, mainServiceLocation string, brokersAddres
     s.mainServiceLocation, err = s.defineMainServiceLocation(mainServiceLocation)
     if err != nil {
         return nil, err
-    }
-    for key := range msgTemplates {
-        msgTemplates[key] = strings.Replace(msgTemplates[key], "{host}", s.mainServiceLocation, -1)
     }
     s.connLimiter = make(chan struct{}, maxConns)
     return s, nil
@@ -194,7 +191,7 @@ func (s *EmailServer) SendAuthMessage(email, key, method string) error {
 }
 
 func (s *EmailServer) makeAuthMessage(key, method string) string {
-   return fmt.Sprintf(msgTemplates[method], key) 
+   return fmt.Sprintf(msgTemplates[method], s.mainServiceLocation, key) 
 }
 
 func (s *EmailServer) SendDailyMessage(email, nickname string) error {
