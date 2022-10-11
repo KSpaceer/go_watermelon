@@ -24,16 +24,24 @@ import (
 )
 
 const (
-    maxConns = 10
-    watermelonsDir = "../../../img"    
+    // maxConns is used to limit currently active SMTP connections.
+    maxConns = 10 
+
+    // watermelonsDir contains path to the directory with images.
+    watermelonsDir = "../../../img"
+    // watermelonImgMailName defines the name of attached file.
     watermelonImgMailName = "watermelon"
+    // dailyDeliveryMethodName represents a key to msgTemplates for value of daily message.
     dailyDeliveryMethodName = "sendWatermelon"
+    // *SubjectName consts define subject name for different types of messages
     authMsgSubjectName = "Confirm action"
     dailyMsgSubjectName = "Daily watermelon"
+    // emailInfoFieldAmount is used to count necessary fields of SMTPServer
     emailInfoFieldAmount = 4
 )
 
 var (
+    // msgTemplates contains HTML templates for different messages.
     msgTemplates = map[string]string{
         "ADD" : `<html>
                     <head>
@@ -70,15 +78,28 @@ var (
 
 )
 
+// EmailServer embodies email sending service. It embeds
+// SMTPServer to send email messages, Kafka ConsumerGroup to get requests
+// from other services (meaning UserHandling), Logger to log events. 
 type EmailServer struct {
     *mail.SMTPServer
     sarama.ConsumerGroup
     zerolog.Logger
+
+    // logProducerCloser is used to close the message broker producer used to
+    // send logs to database
     logProducerCloser func() error
+
+    // connLimiter is a buffered channel used to limit a number of active connections.
     connLimiter chan struct{}
+
+    // mainServiceLocation defines a location of UserHandling service (i.e. HTTP proxy) to put
+    // it in templates.
     mainServiceLocation string
 }
 
+// NewEmailServer creates a new EmailServer instance using a file to configurate the SMTP Server,
+// path to the main service and broker addresses to create a consumer group and log producer.
 func NewEmailServer(emailInfoFilePath, mainServiceLocation string, brokersAddresses []string) (*EmailServer, error) {
     s := &EmailServer{}
     s.SMTPServer = mail.NewSMTPClient()
@@ -104,16 +125,19 @@ func NewEmailServer(emailInfoFilePath, mainServiceLocation string, brokersAddres
     return s, nil
 }
 
+// Disconnect closes all existing connectins of EmailServer.
 func (s *EmailServer) Disconnect() {
     s.Info().Msg("Email server is disconnected from MB.")
     s.ConsumerGroup.Close()
     s.logProducerCloser()
 }
 
+// Wait is used to lock main goroutine until all other are closed.
 func (s *EmailServer) Wait() {
     for len(s.connLimiter) != 0 {}
 }
 
+// SubscribeToTopics starts consuming incoming messages from other services.
 func (s *EmailServer) SubscribeToTopics (ctx context.Context) error {
     for {
         if err := s.Consume(ctx, []string{sc.AuthTopic, sc.DailyDeliveryTopic}, s); err != nil {
@@ -125,6 +149,7 @@ func (s *EmailServer) SubscribeToTopics (ctx context.Context) error {
     }
 }
 
+// defineMainServiceLocation replaces "localhost" with external IP. Otherwise it returns given string.
 func (s *EmailServer) defineMainServiceLocation(mainServiceLocation string) (string, error) {
     if strings.HasPrefix(mainServiceLocation, "localhost") {
         interfaceAddresses, err := net.InterfaceAddrs()
@@ -145,6 +170,8 @@ func (s *EmailServer) defineMainServiceLocation(mainServiceLocation string) (str
     return mainServiceLocation, nil
 }
 
+// readEmailInfoFile reads CSV data from file (with given filepath) and
+// sets SMTPServer fields.
 func (s *EmailServer) readEmailInfoFile(emailInfoFilePath string) error {
     var err error
     if !filepath.IsAbs(emailInfoFilePath) {
@@ -188,6 +215,8 @@ func (s *EmailServer) readEmailInfoFile(emailInfoFilePath string) error {
     return nil
 }
 
+// SendAuthMessage creates a new SMTP connection through which sends a new auth message
+// using given email.
 func (s *EmailServer) SendAuthMessage(email, key, method string) error {
     client, err := s.Connect()
     if err != nil {
@@ -208,10 +237,13 @@ func (s *EmailServer) SendAuthMessage(email, key, method string) error {
     return nil
 }
 
+// makeAuthMessage puts given key and method into template's placeholders.
 func (s *EmailServer) makeAuthMessage(key, method string) string {
    return fmt.Sprintf(msgTemplates[method], s.mainServiceLocation, key) 
 }
 
+// SendDailyMessage creates a new SMTP connectin through which sends a daily message
+// with random image using given email.
 func (s *EmailServer) SendDailyMessage(email, nickname string) error {
     imgPath, err := s.chooseRandomImg()
     if err != nil {
@@ -238,6 +270,7 @@ func (s *EmailServer) SendDailyMessage(email, nickname string) error {
     return nil
 }
 
+// chooseRandomImg picks a random image from watermelonsDir.
 func (s *EmailServer) chooseRandomImg() (string, error) {
     images, err := os.ReadDir(watermelonsDir)
     if err != nil {
@@ -254,18 +287,23 @@ func (s *EmailServer) chooseRandomImg() (string, error) {
     return result, nil
 }
 
+// makeDailyMessage puts gives nickname and filename into template's placeholders.
 func (s *EmailServer) makeDailyMessage(nickname, filename string) string {
     return fmt.Sprintf(msgTemplates[dailyDeliveryMethodName], nickname, filename)
 }
 
+// Setup is defined to implement sarama.ConsumerGroupHandler
 func (s *EmailServer) Setup(session sarama.ConsumerGroupSession) error {
     return nil
 }
 
+// Cleanup is defined to implement sarama.ConsumerGroupHandler
 func (s *EmailServer) Cleanup(session sarama.ConsumerGroupSession) error {
     return nil
 }
 
+// ConsumeClaim is defined to implement sarama.ConsumerGroupHandler and processes incoming messages, calling
+// corresponding method.
 func (s *EmailServer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
     for message := range claim.Messages() {
         switch message.Topic {

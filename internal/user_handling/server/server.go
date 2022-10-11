@@ -21,14 +21,20 @@ import (
 )
 
 const (
+    // delivery* consts are used to define the time 
+    // for sending daily message to users.
     deliveryHour = 12
     deliveryMinute = 0
     deliverySecond = 0
     deliveryInterval time.Duration = 24 * time.Hour
 
+    // ctxTimeout is used to make a context with timeout of given time.
     ctxTimeout time.Duration = 3 * time.Second
 )
 
+// UserHandlingServer implements UserHandling gRPC service and also embeds
+// additional entities to it work such as data.Data (database and cache),
+// message broker (Kafka) producer and logger.
 type UserHandlingServer struct {
     pb.UnimplementedUserHandlingServer
     data.Data
@@ -36,17 +42,23 @@ type UserHandlingServer struct {
     zerolog.Logger
 }
 
+// NewUserHandlingServer creates a new UserHandlingServer instance using given data.Data and
+// Kafka producer. Also, basing on the producer, it creates a logger which writes simultaneously
+// to stderr and message broker.
 func NewUserHandlingServer(dataHandler data.Data, producer sarama.SyncProducer) (*UserHandlingServer) {
     logger := zerolog.New(io.MultiWriter(os.Stderr, kafkawriter.New(producer))).With().Timestamp().Logger()
     return &UserHandlingServer{Data: dataHandler, SyncProducer: producer, Logger: logger}
 }
 
+// Disconnect closes all used connections.
 func (s *UserHandlingServer) Disconnect() {
     s.Info().Msg("User handling server is disconnected from DB and MB.")
     s.Data.Disconnect()
     s.SyncProducer.Close()
 }
 
+// AuthUser is the part of gRPC service implementation. It authenticates the user and executes
+// cached operation, which is accessed through given key.
 func (s *UserHandlingServer) AuthUser(ctx context.Context, key *pb.Key) (*pb.Response, error) {
     operation, err := s.GetOperation(ctx, key.Key) 
     if err != nil {
@@ -67,6 +79,8 @@ func (s *UserHandlingServer) AuthUser(ctx context.Context, key *pb.Key) (*pb.Res
     return &pb.Response{Message: fmt.Sprintf("Method %s was executed successfully.", operation.Method)}, nil
 }
 
+// AddUser is the part of gRPC service implementation. In case the user with this nickname does not exist,
+// the method sends an authenticating email (with help of the email service) using user's email address. 
 func (s *UserHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Response, error) {
     if ok, err := s.CheckNicknameInDatabase(ctx, user.Nickname); err != nil {
         s.Error().Msgf("An error occured while executing database operation: %v", err)
@@ -90,6 +104,8 @@ func (s *UserHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Re
     return &pb.Response{Message: "Auth email is sent."}, nil
 }
 
+// DeleteUser is the part of gRPC service implementation. In case the user with this nickname does exist,
+// the method sends an authenticating email (with help of the email service) using user's email address.
 func (s *UserHandlingServer) DeleteUser(ctx context.Context, user *pb.User) (*pb.Response, error) {
     if ok, err := s.CheckNicknameInDatabase(ctx, user.Nickname); err != nil {
         s.Error().Msgf("An error occured while executing database operation: %v", err)
@@ -110,6 +126,7 @@ func (s *UserHandlingServer) DeleteUser(ctx context.Context, user *pb.User) (*pb
     return &pb.Response{Message: "Auth email is sent."}, nil
 }
 
+// ListUsers gets list of all users from database and sends it in streaming way.
 func (s *UserHandlingServer) ListUsers(_ *emptypb.Empty, stream pb.UserHandling_ListUsersServer) error {
     ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
     usersList, err := s.GetUsersFromDatabase(ctx)
@@ -126,6 +143,8 @@ func (s *UserHandlingServer) ListUsers(_ *emptypb.Empty, stream pb.UserHandling_
     return nil
 }
 
+// sendAuthEmail sends message with request to deliver a authenticating email to the email service 
+// through message broker.
 func (s *UserHandlingServer) sendAuthEmail(authInfo ...string) error {
     msg := &sarama.ProducerMessage{
         Topic: sc.AuthTopic,
@@ -135,6 +154,8 @@ func (s *UserHandlingServer) sendAuthEmail(authInfo ...string) error {
     return err
 }
 
+// sendDailyEmail sends message with request to deliver the user's daily message to the email service
+// through message broker.
 func (s *UserHandlingServer) sendDailyEmail(user data.User) error {
     msg := &sarama.ProducerMessage{
         Topic: sc.DailyDeliveryTopic,
@@ -144,6 +165,7 @@ func (s *UserHandlingServer) sendDailyEmail(user data.User) error {
     return err
 }
 
+// SendDailyMessages sends messages to message broker with request of sending email for each user.
 func (s *UserHandlingServer) SendDailyMessagesToAllUsers() {
     ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
     usersList, err := s.GetUsersFromDatabase(ctx)
@@ -166,6 +188,8 @@ func (s *UserHandlingServer) SendDailyMessagesToAllUsers() {
     wg.Wait()
 }
 
+// DailyDelivery waits for the time of delivery, then sends messages to all users with
+// constant period of time.
 func (s *UserHandlingServer) DailyDelivery(wg *sync.WaitGroup, cancelChan <-chan struct{}) {
     defer wg.Done()
     curTime := time.Now()
