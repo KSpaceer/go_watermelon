@@ -7,6 +7,7 @@ import (
     "path/filepath"
     "strings"
     "strconv"
+    "io"
     "os"
     "math/rand"
     "net"
@@ -16,7 +17,10 @@ import (
 
     "github.com/Shopify/sarama"
 
+    "github.com/rs/zerolog"
+
     sc "github.com/KSpaceer/go_watermelon/internal/shared_consts"
+    "github.com/KSpaceer/go_watermelon/internal/kafkawriter"
 )
 
 const (
@@ -69,6 +73,8 @@ var (
 type EmailServer struct {
     *mail.SMTPServer
     sarama.ConsumerGroup
+    zerolog.Logger
+    logProducerCloser func() error
     connLimiter chan struct{}
     mainServiceLocation string
 }
@@ -84,6 +90,12 @@ func NewEmailServer(emailInfoFilePath, mainServiceLocation string, brokersAddres
     if err != nil {
         return nil, err
     }
+    logProducer, err := sarama.NewSyncProducer(brokersAddresses, sarama.NewConfig())
+    if err != nil {
+        return nil, err
+    }
+    s.Logger = zerolog.New(io.MultiWriter(os.Stderr, kafkawriter.New(logProducer))).With().Timestamp().Logger()
+    s.logProducerCloser = logProducer.Close
     s.mainServiceLocation, err = s.defineMainServiceLocation(mainServiceLocation)
     if err != nil {
         return nil, err
@@ -93,7 +105,13 @@ func NewEmailServer(emailInfoFilePath, mainServiceLocation string, brokersAddres
 }
 
 func (s *EmailServer) Disconnect() {
+    s.Info().Msg("Email server is disconnected from MB.")
     s.ConsumerGroup.Close()
+    s.logProducerCloser()
+}
+
+func (s *EmailServer) Wait() {
+    for len(s.connLimiter) != 0 {}
 }
 
 func (s *EmailServer) SubscribeToTopics (ctx context.Context) error {
@@ -255,14 +273,20 @@ func (s *EmailServer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sa
             authInfo := strings.Split(string(message.Value), " ")
             go func() {
                 s.connLimiter <- struct{}{}
-                s.SendAuthMessage(authInfo[0], authInfo[1], authInfo[2]) // TODO error channel/logger
+                err := s.SendAuthMessage(authInfo[0], authInfo[1], authInfo[2])
+                if err != nil {
+                    s.Error().Msgf("Occured while sending an auth message: %v", err)
+                }
                 <-s.connLimiter
             }()
         case sc.DailyDeliveryTopic:
             userInfo := strings.Split(string(message.Value), " ")
             go func() {
                 s.connLimiter <- struct{}{}
-                s.SendDailyMessage(userInfo[0], userInfo[1])
+                err := s.SendDailyMessage(userInfo[0], userInfo[1])
+                if err != nil {
+                    s.Error().Msgf("Occured while sending a daily message: %v", err)
+                }
                 <-s.connLimiter
             }()
         }

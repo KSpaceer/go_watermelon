@@ -19,7 +19,7 @@ func (kw *kafkaWriter) Write(p []byte) (n int, err error) {
         Topic: sc.LogsTopic,
         Value: sarama.ByteEncoder(p),
         }
-    _, _, err := kw.SendMessage(msg)
+    _, _, err = kw.SendMessage(msg)
     if err != nil {
         return 0, err
     }

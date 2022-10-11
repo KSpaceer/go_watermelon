@@ -9,9 +9,12 @@ import (
     "strings"
 
     "github.com/KSpaceer/go_watermelon/internal/data"
+    "github.com/KSpaceer/go_watermelon/internal/kafkawriter"
     sc "github.com/KSpaceer/go_watermelon/internal/shared_consts"
     uh "github.com/KSpaceer/go_watermelon/internal/user_handling/server"
     pb "github.com/KSpaceer/go_watermelon/internal/user_handling/proto"
+
+    "github.com/rs/zerolog"
 
     "github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/mock"
@@ -63,6 +66,7 @@ func (d *MockData) GetUsersFromDatabase(ctx context.Context) ([]data.User, error
 func TestAuthUserAddMethod(t *testing.T) {
     mockData := new(MockData)
     uhServer := uh.NewUserHandlingServer(mockData, nil)
+    uhServer.Logger = zerolog.Nop() 
     ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
     defer cancel()
     testOperation := &data.Operation{data.User{"arbuz", "arbuz@gmail.com"}, "ADD"}
@@ -80,6 +84,7 @@ func TestAuthUserAddMethod(t *testing.T) {
 func TestAuthUserDeleteMethod(t *testing.T) {
     mockData := new(MockData)
     uhServer := uh.NewUserHandlingServer(mockData, nil)
+    uhServer.Logger = zerolog.Nop() 
     ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
     defer cancel()
     testOperation := &data.Operation{data.User{"MelonEnjoyer", "melonsarebetter@gmail.com"}, "DELETE"}
@@ -97,6 +102,7 @@ func TestAuthUserDeleteMethod(t *testing.T) {
 func TestAuthUserWrongKey(t *testing.T) {
     mockData := new(MockData)
     uhServer := uh.NewUserHandlingServer(mockData, nil)
+    uhServer.Logger = zerolog.Nop() 
     ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
     defer cancel()
     testOperation := &data.Operation{}
@@ -121,13 +127,14 @@ func (stream *MockStream) Send(m *pb.User) error {
 func TestListUsers(t *testing.T) {
     mockData := new(MockData)
     uhServer := uh.NewUserHandlingServer(mockData, nil)
+    uhServer.Logger = zerolog.Nop() 
     mockStream := new(MockStream)
     testUsers := []data.User{{"pupa", "buhga@example.com"}, {"lupa", "lteria@gmail.com"}}
     mockData.On("GetUsersFromDatabase", mock.Anything).Return(testUsers, nil)
     for i := 0; i < len(testUsers); i++ {
         mockStream.On("Send", mock.Anything).Return(nil)
     }
-    err := uhServer.ListUsers(mockStream)
+    err := uhServer.ListUsers(nil, mockStream)
     mockData.AssertExpectations(t)
     mockStream.AssertExpectations(t)
     assert.Nil(t, err)
@@ -137,6 +144,7 @@ func TestAddUserNotExists(t *testing.T) {
     mockProducer := saramamock.NewSyncProducer(t, sarama.NewConfig())
     mockData := new(MockData)
     uhServer := uh.NewUserHandlingServer(mockData, mockProducer)
+    uhServer.Logger = zerolog.Nop() 
     testUser := &pb.User{Nickname: "ThomasShelby", Email:"peaky_blinders@gmail.com"}
     testKey := "NTAAOcXYBLLKj+SxtQ/cuKiBcxV/cCQENqv1IzMUGQ7HTvwokQu734r9lCvHIffD6seUcARz65hN8Ij9wU1+YwHp5YtdByEBUqm/HS4o+734vJNTtVE5BIjzHP0uflvPaCqgw3me06C2FNlRNsI5d6xOSmBM7MA8tqr0Tgb+ZjA="
     ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
@@ -164,6 +172,7 @@ func TestAddUserNotExists(t *testing.T) {
 func TestAddUserExists(t *testing.T) {
     mockData := new(MockData)
     uhServer := uh.NewUserHandlingServer(mockData, nil)
+    uhServer.Logger = zerolog.Nop() 
     testUser := &pb.User{Nickname: "ThomasShelby", Email:"iamcertainlynotimposter@gmail.com"}
     ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
     defer cancel()
@@ -177,6 +186,7 @@ func TestAddUserExists(t *testing.T) {
 func TestAddUserInvalidEmail(t *testing.T) {
     mockData := new(MockData)
     uhServer := uh.NewUserHandlingServer(mockData, nil)
+    uhServer.Logger = zerolog.Nop() 
     testUser := &pb.User{Nickname:"Newbie", Email: "idontknowwhatemailis"}
     ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
     defer cancel()
@@ -191,6 +201,7 @@ func TestDeleteUserExists(t *testing.T) {
     mockProducer := saramamock.NewSyncProducer(t, sarama.NewConfig())
     mockData := new(MockData)
     uhServer := uh.NewUserHandlingServer(mockData, mockProducer)
+    uhServer.Logger = zerolog.Nop() 
     testUser := &pb.User{Nickname: "MelonEnjoyer", Email:"melonsarebetter@gmail.com"}
     testKey := "S6FqubLd0KzKUebq9kG6t8Zv2JkKDCl43xkcDnXR68i1uFRKoWP6y6tT4DiMbVUR5qzKPHXKXA8jaZtv1O1hACtgNfd9sKP/zfum4UKMCEdiL6P+aNf7hbK78Pwi7hDx78SU8u1euxLpt/yraaYzO/2vt6QAN7+4yVja/5g3SQ0="
     ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
@@ -218,6 +229,7 @@ func TestDeleteUserExists(t *testing.T) {
 func TestDeleteUserNotExists(t *testing.T) {
     mockData := new(MockData)
     uhServer := uh.NewUserHandlingServer(mockData, nil)
+    uhServer.Logger = zerolog.Nop() 
     testUser := &pb.User{Nickname: "AwfulWatermelon", Email:"bebe@gmail.com"}
     ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
     defer cancel()
@@ -232,6 +244,7 @@ func TestDailyMessagesToAllUsers(t *testing.T) {
     mockData := new(MockData)
     mockProducer := saramamock.NewSyncProducer(t, sarama.NewConfig())
     uhServer := uh.NewUserHandlingServer(mockData, mockProducer)
+    uhServer.Logger = zerolog.New(kafkawriter.New(mockProducer))
     testUsers := []data.User{{"pupa", "buhga@example.com"}, {"lupa", "lteria@gmail.com"}}
     mockData.On("GetUsersFromDatabase", mock.Anything).Return(testUsers, nil)
     rand.Seed(time.Now().UnixNano())
@@ -244,16 +257,10 @@ func TestDailyMessagesToAllUsers(t *testing.T) {
             mockProducer.ExpectSendMessageAndSucceed()
         }
     }
-    errChan := make(chan error)
-    go func() {
-        count := 0
-        defer func(){assert.Equal(t, count, expectedFailCount)}()
-        for i := 0; i < expectedFailCount; i++ {
-            <-errChan
-            count++
-        }
-    }()
-    uhServer.SendDailyMessagesToAllUsers(errChan)
+    for i := 0; i < expectedFailCount; i++ {
+        mockProducer.ExpectSendMessageAndSucceed()
+    }
+    uhServer.SendDailyMessagesToAllUsers()
     mockData.AssertExpectations(t)
 }
 

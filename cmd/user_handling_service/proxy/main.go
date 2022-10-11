@@ -1,13 +1,16 @@
 package main
 
 import (
+    "context"
     "flag"
-    "log"
     "net/http"
 
+    "github.com/rs/zerolog/log"
+
     "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+
     "google.golang.org/grpc"
-    "google/golang.org/grpc/credentials/insecure"
+    "google.golang.org/grpc/credentials/insecure"
 
     gw "github.com/KSpaceer/go_watermelon/internal/user_handling/proto"
 )
@@ -25,7 +28,8 @@ func main() {
     opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
     err := gw.RegisterUserHandlingHandlerFromEndpoint(ctx, mux, *grpcServerEndpoint, opts)
     if err != nil {
-        log.Fatalf("Can't register handler from gRPC endpoint: %v", err)
+        log.Fatal().Err(err).Msg("Can't register handler from gRPC endpoint.")
     }
-    log.Fatal(http.ListenAndServe(*httpServerAddr, mux))
+    err = http.ListenAndServe(*httpServerAddr, mux)
+    log.Fatal().Err(err).Msg("Failed to listen and serve.")
 }

@@ -3,12 +3,14 @@ package main
 import (
     "flag"
     "strings"
-    "log"
+    "sync"
     "net"
 
     "google.golang.org/grpc"
     "google.golang.org/grpc/credentials/insecure"
 
+    "github.com/rs/zerolog/log"
+    "github.com/Shopify/sarama"
     "github.com/KSpaceer/go_watermelon/internal/data"
     pb "github.com/KSpaceer/go_watermelon/internal/user_handling/proto"
     uhs "github.com/KSpaceer/go_watermelon/internal/user_handling/server"
@@ -23,31 +25,36 @@ var (
 
 func main() {
     flag.Parse()
+
     dataHandler, err := data.NewPGSRedisData(*redisAddr, *pgsInfoFilePath) 
     if err != nil {
-        log.Fatalf("Failed to create a database handler: %v", err)
+        log.Fatal().Err(err).Msg("Occured while creating a dataHandler.")
     }
-    mbProducer, err := sarama.NewSyncProducer(strings.Split(*messageBrokerAddrs, ","), sarama.NewConfig())
+
+    mbProducer, err := sarama.NewSyncProducer(strings.Split(*messageBrokersAddrs, ","), sarama.NewConfig())
     if err != nil {
-        log.Fatalf("Failed to create a message brocker producer: %v", err)
+        log.Fatal().Err(err).Msg("Occured while creating a message broker producer.")
     }
+
     uhServer := uhs.NewUserHandlingServer(dataHandler, mbProducer)
+    uhServer.Info().Msg("Created a new UserHandlingServer instance.")
+    defer uhServer.Disconnect()
+
     lis, err := net.Listen("tcp", *grpcServerEndpoint)  
     if err != nil {
-        log.Fatalf("Failed to listen: %v", err)
+        log.Fatal().Err(err).Msg("Occured while creating a listener.")
     }
-    grpcServer := grpc.NewServer() 
+
+    grpcServer := grpc.NewServer(grpc.Creds(insecure.NewCredentials())) 
     pb.RegisterUserHandlingServer(grpcServer, uhServer)
-    //TODO: add daily delivery
-    errChan := make(chan error)
+
     cancelChan := make(chan struct{})
-    go uhServer.DailyDelivery(cancelChan, errChan)
-    go func() {
-        for {
-            log.Error(<-errChan)
-        }
-    }()
+    wg := new(sync.WaitGroup)
+    wg.Add(1)
+    go uhServer.DailyDelivery(wg, cancelChan)
+
     err = grpcServer.Serve(lis)
-    cancelChan <- struct{}{}
-    log.Fatal(err)
+    close(cancelChan)
+    wg.Wait()
+    uhServer.Fatal().Msgf("Occured while serving grpc connection: %v", err)
 }

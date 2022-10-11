@@ -9,6 +9,7 @@ require (
 	github.com/go-redis/redismock/v8 v8.0.6
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3
 	github.com/lib/pq v1.10.7
+	github.com/rs/zerolog v1.28.0
 	github.com/stretchr/testify v1.8.0
 	github.com/xhit/go-simple-mail/v2 v2.12.0
 	google.golang.org/grpc v1.49.0
@@ -34,6 +35,8 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.3 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/klauspost/compress v1.15.11 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/onsi/gomega v1.20.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.17 // indirect

@@ -9,6 +9,8 @@ import (
     "io"
     "os"
     "net/mail"
+
+    "google.golang.org/protobuf/types/known/emptypb"
     
     "github.com/Shopify/sarama"
     "github.com/rs/zerolog"
@@ -40,15 +42,15 @@ func NewUserHandlingServer(dataHandler data.Data, producer sarama.SyncProducer) 
 }
 
 func (s *UserHandlingServer) Disconnect() {
+    s.Info().Msg("User handling server is disconnected from DB and MB.")
     s.Data.Disconnect()
     s.SyncProducer.Close()
-    s.Info().Msg("User handling server is disconnected from DB and MB.")
 }
 
 func (s *UserHandlingServer) AuthUser(ctx context.Context, key *pb.Key) (*pb.Response, error) {
-    s.Info().Msg("AuthUser method is called.")
     operation, err := s.GetOperation(ctx, key.Key) 
     if err != nil {
+        s.Error().Msgf("An error occured while accessing cache: %v", err)
         return nil, err
     }
     if operation.Method == "ADD" {
@@ -59,14 +61,15 @@ func (s *UserHandlingServer) AuthUser(ctx context.Context, key *pb.Key) (*pb.Res
         return nil, fmt.Errorf("Wrong key.")
     }
     if err != nil {
+        s.Error().Msgf("An error occured while executing database operation: %v", err)
         return nil, err
     }
-    s.Info().Msg("AuthUser method is executed successfully")
     return &pb.Response{Message: fmt.Sprintf("Method %s was executed successfully.", operation.Method)}, nil
 }
 
 func (s *UserHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Response, error) {
     if ok, err := s.CheckNicknameInDatabase(ctx, user.Nickname); err != nil {
+        s.Error().Msgf("An error occured while executing database operation: %v", err)
         return nil, err
     } else if ok {
         return nil, fmt.Errorf("User with this nickname already exists.")
@@ -76,10 +79,12 @@ func (s *UserHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Re
     }
     key, err := s.SetOperation(ctx, data.User{user.Nickname, user.Email}, "ADD")
     if err != nil {
+        s.Error().Msgf("An error occured while accessing cache: %v", err)
         return nil, err
     }
     err = s.sendAuthEmail(user.Email, key, "ADD")
     if err != nil {
+        s.Error().Msgf("An error occured while sending message to MB: %v", err)
         return nil, err
     }
     return &pb.Response{Message: "Auth email is sent."}, nil
@@ -87,26 +92,30 @@ func (s *UserHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Re
 
 func (s *UserHandlingServer) DeleteUser(ctx context.Context, user *pb.User) (*pb.Response, error) {
     if ok, err := s.CheckNicknameInDatabase(ctx, user.Nickname); err != nil {
+        s.Error().Msgf("An error occured while executing database operation: %v", err)
         return nil, err
     } else if !ok {
         return nil, fmt.Errorf("There is no user with such nickname.")
     }
     key, err := s.SetOperation(ctx, data.User{user.Nickname, user.Email}, "DELETE")
     if err != nil {
+        s.Error().Msgf("An error occured while accessing cache: %v", err)
         return nil, err
     }
     err = s.sendAuthEmail(user.Email, key,  "DELETE")
     if err != nil {
+        s.Error().Msgf("An error occured while sending message to MB: %v", err)
         return nil, err
     }
     return &pb.Response{Message: "Auth email is sent."}, nil
 }
 
-func (s *UserHandlingServer) ListUsers(stream pb.UserHandling_ListUsersServer) error {
+func (s *UserHandlingServer) ListUsers(_ *emptypb.Empty, stream pb.UserHandling_ListUsersServer) error {
     ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
     usersList, err := s.GetUsersFromDatabase(ctx)
     cancel()
     if err != nil {
+        s.Error().Msgf("An error occured while executing database operation: %v", err)
         return err
     }
     for _, user := range usersList {
@@ -122,7 +131,7 @@ func (s *UserHandlingServer) sendAuthEmail(authInfo ...string) error {
         Topic: sc.AuthTopic,
         Value: sarama.StringEncoder(strings.Join(authInfo, " ")),
     }
-    _, _, err := s.SendMessage(msg) // TODO: add partition and offset for logging
+    _, _, err := s.SendMessage(msg)
     return err
 }
 
@@ -131,16 +140,16 @@ func (s *UserHandlingServer) sendDailyEmail(user data.User) error {
         Topic: sc.DailyDeliveryTopic,
         Value: sarama.StringEncoder(user.Email + " " + user.Nickname),
     }
-    _, _, err := s.SendMessage(msg) // TODO: look 6 rows higher
+    _, _, err := s.SendMessage(msg)
     return err
 }
 
-func (s *UserHandlingServer) SendDailyMessagesToAllUsers(errChan chan<- error) {
+func (s *UserHandlingServer) SendDailyMessagesToAllUsers() {
     ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
     usersList, err := s.GetUsersFromDatabase(ctx)
     cancel()
     if err != nil {
-        errChan <- err
+        s.Error().Msgf("An error occured while executing database operation: %v", err)
         return
     }
     wg := new(sync.WaitGroup)
@@ -150,14 +159,15 @@ func (s *UserHandlingServer) SendDailyMessagesToAllUsers(errChan chan<- error) {
             defer wg.Done()
             err := s.sendDailyEmail(user) 
             if err != nil {
-                errChan <- err
+                s.Error().Msgf("An error occured while sending message to MB: %v", err)
             }
         }(user)
     }
     wg.Wait()
 }
 
-func (s *UserHandlingServer) DailyDelivery(cancelChan <-chan struct{}, errChan chan<- error) {
+func (s *UserHandlingServer) DailyDelivery(wg *sync.WaitGroup, cancelChan <-chan struct{}) {
+    defer wg.Done()
     curTime := time.Now()
     deliveryTime := time.Date(curTime.Year(), curTime.Month(), curTime.Day(), deliveryHour,
                                 deliveryMinute, deliverySecond, 0, curTime.Location())
@@ -179,7 +189,7 @@ func (s *UserHandlingServer) DailyDelivery(cancelChan <-chan struct{}, errChan c
     for {
         select {
         case <-ticker.C:
-            s.SendDailyMessagesToAllUsers(errChan)         
+            s.SendDailyMessagesToAllUsers()         
         case <-cancelChan:
             return
         }

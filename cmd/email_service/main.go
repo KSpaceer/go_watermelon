@@ -4,7 +4,8 @@ import (
     "context"
     "flag"
     "strings"
-    "log"
+
+    "github.com/rs/zerolog/log"
 
     es "github.com/KSpaceer/go_watermelon/internal/email/server"
 )
@@ -19,9 +20,11 @@ func main() {
     flag.Parse()
     eServer, err := es.NewEmailServer(*emailInfoFilePath, *mainServiceLocation, strings.Split(*messageBrokersAddrs, ","))
     if err != nil {
-        log.Fatalf("Failed to create a server instance: %v", err)
+        log.Fatal().Err(err).Msg("Occured while creating a new EmailServer instance")
     }
     defer eServer.Disconnect()
-    log.Fatal(eServer.SubscribeToTopics(context.Background()) 
+    err = eServer.SubscribeToTopics(context.Background())
+    eServer.Wait()
+    eServer.Fatal().Msgf("Failed to consume messages: %v", err)
 }
 
