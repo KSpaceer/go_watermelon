@@ -76,6 +76,7 @@ func (s *UserHandlingServer) AuthUser(ctx context.Context, key *pb.Key) (*pb.Res
         s.Error().Msgf("An error occured while executing database operation: %v", err)
         return nil, err
     }
+    s.Info().Msgf("Successfully executed method %s for user %s.", operation.Method, operation.User.Nickname)
     return &pb.Response{Message: fmt.Sprintf("Method %s was executed successfully.", operation.Method)}, nil
 }
 
@@ -101,6 +102,7 @@ func (s *UserHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Re
         s.Error().Msgf("An error occured while sending message to MB: %v", err)
         return nil, err
     }
+    s.Info().Msgf("Got a request to add user %s. The auth email is sent.", user.Nickname)
     return &pb.Response{Message: "Auth email is sent."}, nil
 }
 
@@ -123,6 +125,7 @@ func (s *UserHandlingServer) DeleteUser(ctx context.Context, user *pb.User) (*pb
         s.Error().Msgf("An error occured while sending message to MB: %v", err)
         return nil, err
     }
+    s.Info().Msgf("Got a request to delete user %s. The auth email is sent.", user.Nickname)
     return &pb.Response{Message: "Auth email is sent."}, nil
 }
 
@@ -137,9 +140,11 @@ func (s *UserHandlingServer) ListUsers(_ *emptypb.Empty, stream pb.UserHandling_
     }
     for _, user := range usersList {
         if err := stream.Send(&pb.User{Nickname: user.Nickname, Email: user.Email}); err != nil {
+            s.Error().Msgf("An error occured while sending the list of users: %v", err)
             return err
         }
     }
+    s.Info().Msg("The users list is successfully sent.")
     return nil
 }
 
