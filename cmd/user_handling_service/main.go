@@ -13,6 +13,8 @@ import (
 	pb "github.com/KSpaceer/go_watermelon/internal/user_handling/proto"
 	uhs "github.com/KSpaceer/go_watermelon/internal/user_handling/server"
 	"github.com/Shopify/sarama"
+
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -25,6 +27,8 @@ var (
 
 func main() {
 	flag.Parse()
+
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
 	dataHandler, err := data.NewPGSRedisData(*redisAddr, *pgsInfoFilePath)
 	if err != nil {

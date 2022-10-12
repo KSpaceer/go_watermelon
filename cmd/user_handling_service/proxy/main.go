@@ -5,6 +5,7 @@ import (
 	"flag"
 	"net/http"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -22,6 +23,9 @@ var (
 
 func main() {
 	flag.Parse()
+
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	mux := runtime.NewServeMux()

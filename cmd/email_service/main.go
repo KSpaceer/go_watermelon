@@ -5,6 +5,7 @@ import (
 	"flag"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	es "github.com/KSpaceer/go_watermelon/internal/email/server"
@@ -18,6 +19,9 @@ var (
 
 func main() {
 	flag.Parse()
+
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+
 	eServer, err := es.NewEmailServer(*emailInfoFilePath, *mainServiceLocation, strings.Split(*messageBrokersAddrs, ","))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Occured while creating a new EmailServer instance")
