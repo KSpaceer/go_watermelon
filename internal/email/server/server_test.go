@@ -49,6 +49,7 @@ func TestReadEmailInfoFileWrong(t *testing.T) {
 
 func TestChooseRandomImg(t *testing.T) {
 	eServer := EmailServer{}
+    eServer.imageDirectory = "../../../img"
 	path, err := eServer.chooseRandomImg()
 	if assert.Nil(t, err) {
 		if !assert.True(t, filepath.IsAbs(path)) {

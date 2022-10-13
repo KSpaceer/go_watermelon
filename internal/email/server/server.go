@@ -26,9 +26,6 @@ import (
 const (
 	// maxConns is used to limit currently active SMTP connections.
 	maxConns = 10
-
-	// watermelonsDir contains path to the directory with images.
-	watermelonsDir = "../../../img"
 	// watermelonImgMailName defines the name of attached file.
 	watermelonImgMailName = "watermelon"
 	// dailyDeliveryMethodName represents a key to msgTemplates for value of daily message.
@@ -95,11 +92,14 @@ type EmailServer struct {
 	// mainServiceLocation defines a location of UserHandling service (i.e. HTTP proxy) to put
 	// it in templates.
 	mainServiceLocation string
+
+	// imageDirectory contains path to the directory with images.
+    imageDirectory string
 }
 
 // NewEmailServer creates a new EmailServer instance using a file to configurate the SMTP Server,
 // path to the main service and broker addresses to create a consumer group and log producer.
-func NewEmailServer(emailInfoFilePath, mainServiceLocation string, brokersAddresses []string) (*EmailServer, error) {
+func NewEmailServer(emailInfoFilePath, mainServiceLocation, imageDirectory string, brokersAddresses []string) (*EmailServer, error) {
 	s := &EmailServer{}
 	s.SMTPServer = mail.NewSMTPClient()
 	err := s.readEmailInfoFile(emailInfoFilePath)
@@ -120,6 +120,11 @@ func NewEmailServer(emailInfoFilePath, mainServiceLocation string, brokersAddres
 	if err != nil {
 		return nil, err
 	}
+    if info, err := os.Stat(imageDirectory); err != nil {
+        return nil, err
+    } else if !info.IsDir() {
+        return nil, fmt.Errorf("%s is not a directory.", imageDirectory)
+    }
 	s.connLimiter = make(chan struct{}, maxConns)
 	return s, nil
 }
@@ -270,9 +275,9 @@ func (s *EmailServer) SendDailyMessage(email, nickname string) error {
 	return nil
 }
 
-// chooseRandomImg picks a random image from watermelonsDir.
+// chooseRandomImg picks a random image from imageDirectory.
 func (s *EmailServer) chooseRandomImg() (string, error) {
-	images, err := os.ReadDir(watermelonsDir)
+	images, err := os.ReadDir(s.imageDirectory)
 	if err != nil {
 		return "", err
 	}
@@ -280,7 +285,7 @@ func (s *EmailServer) chooseRandomImg() (string, error) {
 	for selectedFile.IsDir() {
 		selectedFile = images[rand.Intn(len(images))]
 	}
-	result, err := filepath.Abs(filepath.Join(watermelonsDir, selectedFile.Name()))
+	result, err := filepath.Abs(filepath.Join(s.imageDirectory, selectedFile.Name()))
 	if err != nil {
 		return "", nil
 	}
