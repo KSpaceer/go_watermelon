@@ -4,6 +4,7 @@ GOFLAGS = -a -installsuffix cgo -ldflags '-s'
 EMAILSERVICEPATH = ./cmd/email_service/
 MAINSERVICEPATH = ./cmd/user_handling_service/
 MAINSERVICEPROXYPATH = ./cmd/user_handling_service/proxy/
+CLICKHOUSEPATH = ./dbdata/clickhouse
 
 EMAILSERVICEEXEC = ./cmd/email_service/email_service
 MAINSERVICEEXEC = ./cmd/user_handling_service/user_handling_service
@@ -12,6 +13,7 @@ MAINSERVICEPROXYEXEC = ./cmd/user_handling_service/proxy/user_handling_service_p
 EMAILSERVICEIMAGE = watermelon-emailservice
 MAINSERVICEIMAGE = watermelon-mainservice
 MAINSERVICEPROXYIMAGE = watermelon-mainserviceproxy
+CLICKHOUSEIMAGE = clickhouse-exposed
 
 build: build_email_service build_main_service build_main_service_proxy
 
@@ -39,6 +41,7 @@ create_images: container_build
 	docker build -t $(EMAILSERVICEIMAGE) $(EMAILSERVICEPATH)
 	docker build -t $(MAINSERVICEIMAGE) $(MAINSERVICEPATH)
 	docker build -t $(MAINSERVICEPROXYIMAGE) $(MAINSERVICEPROXYPATH)	
+	docker build -t $(CLICKHOUSEIMAGE) $(CLICKHOUSEPATH)
 
 test:
 	go test -cpu 1,4 -race ./...

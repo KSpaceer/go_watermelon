@@ -1,4 +1,4 @@
-version: '2'
+version: '3.9'
 
 services:
     zookeeper-1:
@@ -60,9 +60,22 @@ services:
             POSTGRES_DB: "watermelon"
             POSTGRES_USER: "postgres"
             POSTGRES_PASSWORD: "postgres"
-            PGDATA: "/var/lib/postgresql/data/pgdata"
+            PGDATA: "/var/lib/postgresql/data/dbdata/pgdata"
         volumes:
-            - ./pgdata:/var/lib/postgresql/data
+            - ./dbdata/pgdata:/var/lib/postgresql/data
         ports:
             - 9467:9467
+
+    clickhouse:
+        image: clickhouse-exposed 
+        depends_on:
+            - kafka-1
+            - kafka-2
+        volumes:
+            - ./dbdata/clickhouse/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+            - ./dbdata/clickhouse:/var/lib/clickhouse/chdata
+        ports:
+            - 5050:5050
+        
+        
 
