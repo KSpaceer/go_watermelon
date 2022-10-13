@@ -94,7 +94,7 @@ type EmailServer struct {
 	mainServiceLocation string
 
 	// imageDirectory contains path to the directory with images.
-    imageDirectory string
+	imageDirectory string
 }
 
 // NewEmailServer creates a new EmailServer instance using a file to configurate the SMTP Server,
@@ -120,11 +120,11 @@ func NewEmailServer(emailInfoFilePath, mainServiceLocation, imageDirectory strin
 	if err != nil {
 		return nil, err
 	}
-    if info, err := os.Stat(imageDirectory); err != nil {
-        return nil, err
-    } else if !info.IsDir() {
-        return nil, fmt.Errorf("%s is not a directory.", imageDirectory)
-    }
+	if info, err := os.Stat(imageDirectory); err != nil {
+		return nil, err
+	} else if !info.IsDir() {
+		return nil, fmt.Errorf("%s is not a directory.", imageDirectory)
+	}
 	s.connLimiter = make(chan struct{}, maxConns)
 	return s, nil
 }

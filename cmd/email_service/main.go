@@ -14,7 +14,7 @@ import (
 var (
 	emailInfoFilePath   = flag.String("email-info-file", "./emailinfo.csv", "Email info file")
 	mainServiceLocation = flag.String("main-service-location", "localhost:8081", "Main service URL")
-    imageDirectory = flag.String("image-directory", "/img", "Image directory")
+	imageDirectory      = flag.String("image-directory", "/img", "Image directory")
 	messageBrokersAddrs = flag.String("brokers-addresses", "localhost:29092,localhost:29093", "Message brokers addresses")
 )
 

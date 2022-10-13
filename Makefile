@@ -1,3 +1,5 @@
+GOENVS = CGO_ENABLED=0 GOOS=linux GOARCH=386
+GOFLAGS = -a -installsuffix cgo -ldflags '-s'
 EMAILSERVICEPATH = ./cmd/email_service/
 MAINSERVICEPATH = ./cmd/user_handling_service/
 MAINSERVICEPROXYPATH = ./cmd/user_handling_service/proxy/
@@ -15,6 +17,17 @@ build_main_service:
 
 build_main_service_proxy:
 	go build -o $(MAINSERVICEPROXYEXEC) $(MAINSERVICEPROXYPATH) 
+
+container_build: container_build_email_service container_build_main_service container_build_main_service_proxy
+
+container_build_email_service:
+	$(GOENVS) go build $(GOFLAGS) -o $(EMAILSERVICEEXEC) $(EMAILSERVICEPATH)
+
+container_build_main_service:
+	$(GOENVS) go build $(GOFLAGS) -o $(MAINSERVICEEXEC) $(MAINSERVICEPATH)
+
+container_build_main_service_proxy:
+	$(GOENVS) go build $(GOFLAGS)-o $(MAINSERVICEPROXYEXEC) $(MAINSERVICEPROXYPATH) 
 
 test:
 	go test -cpu 1,4 -race ./...
