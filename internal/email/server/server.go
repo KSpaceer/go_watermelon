@@ -82,10 +82,6 @@ type EmailServer struct {
 	sarama.ConsumerGroup
 	zerolog.Logger
 
-	// logProducerCloser is used to close the message broker producer used to
-	// send logs to database
-	logProducerCloser func() error
-
 	// connLimiter is a buffered channel used to limit a number of active connections.
 	connLimiter chan struct{}
 
@@ -99,44 +95,33 @@ type EmailServer struct {
 
 // NewEmailServer creates a new EmailServer instance using a file to configurate the SMTP Server,
 // path to the main service and broker addresses to create a consumer group and log producer.
-func NewEmailServer(emailInfoFilePath, mainServiceLocation, imageDirectory string, brokersAddresses []string) (*EmailServer, error) {
+func NewEmailServer(emailInfoFilePath, mainServiceLocation, imageDirectory string, cg sarama.ConsumerGroup, lp sarama.SyncProducer) (returnedS *EmailServer, returnedErr error) {
 	s := &EmailServer{}
 	s.SMTPServer = mail.NewSMTPClient()
 	err := s.readEmailInfoFile(emailInfoFilePath)
 	if err != nil {
 		return nil, err
 	}
-	s.ConsumerGroup, err = sarama.NewConsumerGroup(brokersAddresses, "", sarama.NewConfig())
-	if err != nil {
-		return nil, err
-	}
-	logProducer, err := sarama.NewSyncProducer(brokersAddresses, sarama.NewConfig())
-	if err != nil {
-		return nil, err
-	}
-	s.Logger = zerolog.New(io.MultiWriter(os.Stderr, kafkawriter.New(logProducer))).With().Timestamp().Logger()
-	s.logProducerCloser = logProducer.Close
 	s.mainServiceLocation, err = s.defineMainServiceLocation(mainServiceLocation)
 	if err != nil {
 		return nil, err
 	}
+
 	if info, err := os.Stat(imageDirectory); err != nil {
 		return nil, err
 	} else if !info.IsDir() {
 		return nil, fmt.Errorf("%s is not a directory.", imageDirectory)
 	}
+
+	s.Logger = zerolog.New(io.MultiWriter(os.Stderr, kafkawriter.New(lp))).With().Timestamp().Logger()
+
+	s.ConsumerGroup = cg
+
 	s.connLimiter = make(chan struct{}, maxConns)
 	return s, nil
 }
 
-// Disconnect closes all existing connectins of EmailServer.
-func (s *EmailServer) Disconnect() {
-	s.Info().Msg("Email server is disconnected from MB.")
-	s.ConsumerGroup.Close()
-	s.logProducerCloser()
-}
-
-// Wait is used to lock main goroutine until all other are closed.
+// Wait is used to lock main goroutine until all connections are closed.
 func (s *EmailServer) Wait() {
 	for len(s.connLimiter) != 0 {
 	}
@@ -247,7 +232,7 @@ func (s *EmailServer) makeAuthMessage(key, method string) string {
 	return fmt.Sprintf(msgTemplates[method], s.mainServiceLocation, key)
 }
 
-// SendDailyMessage creates a new SMTP connectin through which sends a daily message
+// SendDailyMessage creates a new SMTP connection through which sends a daily message
 // with random image using given email.
 func (s *EmailServer) SendDailyMessage(email, nickname string) error {
 	imgPath, err := s.chooseRandomImg()

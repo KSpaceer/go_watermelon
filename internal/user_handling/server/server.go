@@ -50,16 +50,10 @@ func NewUserHandlingServer(dataHandler data.Data, producer sarama.SyncProducer) 
 	return &UserHandlingServer{Data: dataHandler, SyncProducer: producer, Logger: logger}
 }
 
-// Disconnect closes all used connections.
-func (s *UserHandlingServer) Disconnect() {
-	s.Info().Msg("User handling server is disconnected from DB and MB.")
-	s.Data.Disconnect()
-	s.SyncProducer.Close()
-}
-
 // AuthUser is the part of gRPC service implementation. It authenticates the user and executes
 // cached operation, which is accessed through given key.
 func (s *UserHandlingServer) AuthUser(ctx context.Context, key *pb.Key) (*pb.Response, error) {
+	s.Info().Msgf("Got a call for AuthUser method with key %q", key)
 	operation, err := s.GetOperation(ctx, key.Key)
 	if err != nil {
 		s.Error().Msgf("An error occured while accessing cache: %v", err)
@@ -83,6 +77,7 @@ func (s *UserHandlingServer) AuthUser(ctx context.Context, key *pb.Key) (*pb.Res
 // AddUser is the part of gRPC service implementation. In case the user with this nickname does not exist,
 // the method sends an authenticating email (with help of the email service) using user's email address.
 func (s *UserHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Response, error) {
+	s.Info().Msgf("Got a call for AddUser method with nickname %q and email %q", user.Nickname, user.Email)
 	if ok, err := s.CheckNicknameInDatabase(ctx, user.Nickname); err != nil {
 		s.Error().Msgf("An error occured while executing database operation: %v", err)
 		return nil, err
@@ -109,6 +104,7 @@ func (s *UserHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Re
 // DeleteUser is the part of gRPC service implementation. In case the user with this nickname does exist,
 // the method sends an authenticating email (with help of the email service) using user's email address.
 func (s *UserHandlingServer) DeleteUser(ctx context.Context, user *pb.User) (*pb.Response, error) {
+	s.Info().Msgf("Got a call for DeleteUser method with nickname %q and email %q", user.Nickname, user.Email)
 	if ok, err := s.CheckNicknameInDatabase(ctx, user.Nickname); err != nil {
 		s.Error().Msgf("An error occured while executing database operation: %v", err)
 		return nil, err
@@ -131,6 +127,7 @@ func (s *UserHandlingServer) DeleteUser(ctx context.Context, user *pb.User) (*pb
 
 // ListUsers gets list of all users from database and sends it in streaming way.
 func (s *UserHandlingServer) ListUsers(_ *emptypb.Empty, stream pb.UserHandling_ListUsersServer) error {
+	s.Info().Msg("Got a call for ListUsers method.")
 	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
 	usersList, err := s.GetUsersFromDatabase(ctx)
 	cancel()
@@ -172,6 +169,7 @@ func (s *UserHandlingServer) sendDailyEmail(user data.User) error {
 
 // SendDailyMessages sends messages to message broker with request of sending email for each user.
 func (s *UserHandlingServer) SendDailyMessagesToAllUsers() {
+	s.Info().Msg("Starting to send daily messages.")
 	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
 	usersList, err := s.GetUsersFromDatabase(ctx)
 	cancel()

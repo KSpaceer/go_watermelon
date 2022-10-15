@@ -3,6 +3,7 @@ version: '3.9'
 services:
     zookeeper-1:
         image: confluentinc/cp-zookeeper:latest
+        restart: always
         environment:
             ZOOKEEPER_CLIENT_PORT: 2181
             ZOOKEEPER_TICK_TIME: 2000
@@ -11,6 +12,7 @@ services:
 
     zookeeper-2: 
         image: confluentinc/cp-zookeeper:latest
+        restart: always
         environment:
             ZOOKEEPER_CLIENT_PORT: 2181
             ZOOKEEPER_TICK_TIME: 2000
@@ -19,6 +21,7 @@ services:
 
     kafka-1:
         image: confluentinc/cp-kafka:latest
+        restart: always
         depends_on:
             - zookeeper-1
             - zookeeper-2
@@ -34,6 +37,7 @@ services:
 
     kafka-2:
         image: confluentinc/cp-kafka:latest
+        restart: always
         depends_on:
             - zookeeper-1
             - zookeeper-2
@@ -49,6 +53,7 @@ services:
 
     redis:
         image: bitnami/redis:latest
+        restart: always
         environment:
             ALLOW_EMPTY_PASSWORD: "yes"
         ports:
@@ -56,18 +61,20 @@ services:
 
     postgres:
         image: postgres:latest
+        restart: always
         environment:
             POSTGRES_DB: "watermelon"
             POSTGRES_USER: "postgres"
             POSTGRES_PASSWORD: "postgres"
-            PGDATA: "/var/lib/postgresql/data/dbdata/pgdata"
+            PGDATA: "/var/lib/postgresql/data/pgdata"
         volumes:
             - ./dbdata/pgdata:/var/lib/postgresql/data
         ports:
-            - 9467:9467
+            - 5432:5432
 
     clickhouse:
-        image: clickhouse-exposed 
+        image: clickhouse-exposed:latest
+        restart: always
         depends_on:
             - kafka-1
             - kafka-2
@@ -75,7 +82,36 @@ services:
             - ./dbdata/clickhouse/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
             - ./dbdata/clickhouse:/var/lib/clickhouse/chdata
         ports:
-            - 5050:5050
+            - 9000:9000
+
+    mainservice:
+        image: watermelon-mainservice
+        restart: always
+        depends_on:
+            - kafka-1
+            - kafka-2
+            - redis
+            - postgres
+        ports:
+            - 9090:9090
+
+    emailservice:
+        image: watermelon-emailservice
+        restart: always
+        depends_on:
+            - kafka-1
+            - kafka-2
+        ports:
+            - 587:587
+
+    mainserviceproxy:
+        image: watermelon-mainserviceproxy
+        restart: always
+        depends_on:
+            - mainservice
+        ports:
+            - 8081:8081
+
         
         
 

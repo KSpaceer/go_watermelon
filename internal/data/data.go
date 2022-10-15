@@ -20,6 +20,8 @@ const (
 	keySize                       = 128              // authentication key size
 	authExpiration  time.Duration = 15 * time.Minute // auth method info expiration time in cache
 	cacheExpiration time.Duration = time.Minute      // other info expiration time
+	connectTimeout  time.Duration = time.Second      // contextual timeout for connections to DB and cache
+	connectAttempts               = 4                // amount of attempts for connections
 	ListUsersKey                  = "UsersList"      // key for cache to get the list of users
 )
 
@@ -80,17 +82,26 @@ type Operation struct {
 // NewPGSRedisData creates a new postgresRedisData instance using Redis cache address
 // and postgres DB info stored in a file. It also creates tables in database if
 // they don't already exist. Returns an error in case of falied connections.
-func NewPGSRedisData(redisAddress, pgsInfoFile string) (*postgresRedisData, error) {
+func NewPGSRedisData(redisAddress, pgsInfoFile string) (returnedD *postgresRedisData, returnedErr error) {
 	d := new(postgresRedisData)
+
 	d.cache = redis.NewClient(&redis.Options{
 		Addr:     redisAddress,
 		Password: "",
 		DB:       0,
 	})
-	_, err := d.cache.Ping(context.Background()).Result()
+	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
+	defer cancel()
+	err := d.cache.Ping(ctx).Err()
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if returnedErr != nil {
+			d.cache.Close()
+		}
+	}()
+
 	if !filepath.IsAbs(pgsInfoFile) {
 		pgsInfoFile, err = filepath.Abs(pgsInfoFile)
 		if err != nil {
@@ -98,16 +109,26 @@ func NewPGSRedisData(redisAddress, pgsInfoFile string) (*postgresRedisData, erro
 		}
 	}
 	pgsInfo, err := os.ReadFile(pgsInfoFile)
+	if err != nil {
+		return nil, err
+	}
+
 	d.db, err = sql.Open("postgres", string(pgsInfo))
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if returnedErr != nil {
+			d.db.Close()
+		}
+	}()
 	if err := d.db.Ping(); err != nil {
 		return nil, err
 	}
 	if err := d.createUsersTable(); err != nil {
 		return nil, err
 	}
+
 	return d, nil
 }
 

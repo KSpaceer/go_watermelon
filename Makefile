@@ -38,16 +38,16 @@ container_build_main_service_proxy:
 	$(GOENVS) go build $(GOFLAGS) -o $(MAINSERVICEPROXYEXEC) $(MAINSERVICEPROXYPATH) 
 
 create_images: container_build
-	docker build -t $(EMAILSERVICEIMAGE) $(EMAILSERVICEPATH)
-	docker build -t $(MAINSERVICEIMAGE) $(MAINSERVICEPATH)
-	docker build -t $(MAINSERVICEPROXYIMAGE) $(MAINSERVICEPROXYPATH)	
-	docker build -t $(CLICKHOUSEIMAGE) $(CLICKHOUSEPATH)
+	docker build --rm -t $(EMAILSERVICEIMAGE) $(EMAILSERVICEPATH)
+	docker build --rm -t $(MAINSERVICEIMAGE) $(MAINSERVICEPATH)
+	docker build --rm -t $(MAINSERVICEPROXYIMAGE) $(MAINSERVICEPROXYPATH)	
+	docker build --rm -t $(CLICKHOUSEIMAGE) $(CLICKHOUSEPATH)
 
 test:
-	go test -cpu 1,4 -race ./...
+	go test -cpu 1,4 -race ./cmd/... ./internal/...
 
 fmt:
-	go fmt ./...
+	go fmt ./cmd/... ./internal/...
 
 clean:
 	rm -rf $(EMAILSERVICEEXEC) $(MAINSERVICEEXEC) $(MAINSERVICEPROXYEXEC)

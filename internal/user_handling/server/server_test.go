@@ -249,6 +249,7 @@ func TestDailyMessagesToAllUsers(t *testing.T) {
 	mockData.On("GetUsersFromDatabase", mock.Anything).Return(testUsers, nil)
 	rand.Seed(time.Now().UnixNano())
 	expectedFailCount := 0
+	mockProducer.ExpectSendMessageAndSucceed() // logging
 	for i := 0; i < len(testUsers); i++ {
 		if rand.Intn(5) == 0 {
 			mockProducer.ExpectSendMessageAndFail(fmt.Errorf("FAIL"))
@@ -258,7 +259,7 @@ func TestDailyMessagesToAllUsers(t *testing.T) {
 		}
 	}
 	for i := 0; i < expectedFailCount; i++ {
-		mockProducer.ExpectSendMessageAndSucceed()
+		mockProducer.ExpectSendMessageAndSucceed() // logging errors
 	}
 	uhServer.SendDailyMessagesToAllUsers()
 	mockData.AssertExpectations(t)
