@@ -202,6 +202,7 @@ func (s *EmailServer) readEmailInfoFile(emailInfoFilePath string) error {
 	if infoCount != emailInfoFieldAmount {
 		return fmt.Errorf("Invalid file %q: expected %d fields of info to parse, got %d.", emailInfoFilePath, emailInfoFieldAmount, infoCount)
 	}
+	s.SMTPServer.Encryption = mail.EncryptionSTARTTLS
 	return nil
 }
 

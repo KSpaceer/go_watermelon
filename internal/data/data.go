@@ -68,15 +68,15 @@ type postgresRedisData struct {
 
 // User represents a user with certain nickname and email.
 type User struct {
-	Nickname string `json: "nickname"`
-	Email    string `json: "email"`
+	Nickname string `json:"nickname"`
+	Email    string `json:"email"`
 }
 
 // Operation represents a method which will be executed
 // upon user
 type Operation struct {
-	User   User   `json: "user"`
-	Method string `json: "method"`
+	User   User   `json:"user"`
+	Method string `json:"method"`
 }
 
 // NewPGSRedisData creates a new postgresRedisData instance using Redis cache address

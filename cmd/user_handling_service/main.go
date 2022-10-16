@@ -25,7 +25,7 @@ const (
 )
 
 var (
-	grpcServerEndpoint  = flag.String("grpc-server-endpoint", "localhost:9090", "gRPC server endpoint")
+	grpcServerEndpoint  = flag.String("grpc-server-endpoint", ":9090", "gRPC server endpoint")
 	redisAddr           = flag.String("redis-address", "redis:6379", "Redis DB address")
 	pgsInfoFilePath     = flag.String("pgs-info-file", "./pgsinfo.txt", "Postgres info file")
 	messageBrokersAddrs = flag.String("brokers-addresses", "kafka-1:9092,kafka-2:9092", "Message brokers addresses")

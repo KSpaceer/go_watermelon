@@ -23,8 +23,8 @@ const (
 )
 
 var (
-	grpcServerEndpoint = flag.String("grpc-server-endpoint", "localhost:9090", "gRPC server endpoint")
-	httpServerAddr     = flag.String("http-server-address", "localhost:8081", "HTTP server address")
+	grpcServerEndpoint = flag.String("grpc-server-endpoint", "mainservice:9090", "gRPC server endpoint")
+	httpServerAddr     = flag.String("http-server-address", ":8081", "HTTP server address")
 )
 
 func registerGRPCHandler(ctx context.Context, mux *runtime.ServeMux, opts []grpc.DialOption) error {

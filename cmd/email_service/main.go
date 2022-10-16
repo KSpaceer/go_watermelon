@@ -31,7 +31,8 @@ func createConsumerGroup(addrs []string, conf *sarama.Config) (sarama.ConsumerGr
 	timeout := timeoutStep
 	for i := 0; i < connectAttempts; i++ {
 		log.Info().Msg("Creating a consumer group in message broker...")
-		consumerGroup, err := sarama.NewConsumerGroup(addrs, "emailsend", conf)
+        var consumerGroup sarama.ConsumerGroup
+		consumerGroup, err = sarama.NewConsumerGroup(addrs, "emailsend", conf)
 		if err == nil {
 			log.Info().Msg("Successfully created a consumer group.")
 			return consumerGroup, nil
@@ -48,7 +49,8 @@ func createLogProducer(addrs []string, conf *sarama.Config) (sarama.SyncProducer
 	timeout := timeoutStep
 	for i := 0; i < connectAttempts; i++ {
 		log.Info().Msg("Creating a sync producer in message broker...")
-		logProducer, err := sarama.NewSyncProducer(addrs, conf)
+		var logProducer sarama.SyncProducer
+		logProducer, err = sarama.NewSyncProducer(addrs, conf)
 		if err == nil {
 			log.Info().Msg("Successfully created a sync producer.")
 			return logProducer, nil
