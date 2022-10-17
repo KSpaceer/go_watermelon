@@ -115,6 +115,8 @@ func NewEmailServer(emailInfoFilePath, mainServiceLocation, imageDirectory strin
 		return nil, fmt.Errorf("%s is not a directory.", imageDirectory)
 	}
 
+    s.imageDirectory = imageDirectory
+
 	s.Logger = zerolog.New(io.MultiWriter(os.Stderr, kafkawriter.New(lp))).With().Timestamp().Logger()
 
 	s.ConsumerGroup = cg
