@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// addUserCall is used to call (through gRPC) AddUser method on main service.
 func addUserCall(nickname, email, mainServiceLocation string) (string, error) {
 	user := struct {
 		Nickname string `json:"nickname,omitempty"`
@@ -30,16 +31,18 @@ func addUserCall(nickname, email, mainServiceLocation string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode > 399 {
-		return "", fmt.Errorf("Got response status %q", resp.Status)
-	}
-	bodyData, err := io.ReadAll(resp.Body)
+    bodyData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
-	return string(bodyData), nil
+    bodyStr := string(bodyData)
+	if resp.StatusCode > 399 {
+		return "", fmt.Errorf("Got response status %q with body %q", resp.Status, bodyStr)
+	}
+	return bodyStr, nil
 }
 
+// deleteUserCall is used to call (through gRPC) DeleteUser method on main service.
 func deleteUserCall(nickname, mainServiceLocation string) (string, error) {
 	req, err := http.NewRequest(http.MethodDelete, mainServiceLocation+"/v1/users/"+nickname, nil)
 	if err != nil {
@@ -51,20 +54,21 @@ func deleteUserCall(nickname, mainServiceLocation string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode > 399 {
-		return "", fmt.Errorf("Got response status %q", resp.Status)
-	}
-	bodyData, err := io.ReadAll(resp.Body)
+    bodyData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
-	return string(bodyData), nil
+    bodyStr := string(bodyData)
+	if resp.StatusCode > 399 {
+		return "", fmt.Errorf("Got response status %q with body %q", resp.Status, bodyStr)
+	}
+	return bodyStr, nil
 }
 
+// deleteUserCall is used to call (through gRPC) DeleteUser method on main service.
 func listUsersCall(mainServiceLocation string) (string, error) {
 	resp, err := http.Get(mainServiceLocation + "/v1/users")
 	if err != nil {
-		fmt.Println("ere")
 		return "", err
 	}
 	defer resp.Body.Close()
@@ -72,5 +76,9 @@ func listUsersCall(mainServiceLocation string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(bodyData), nil
+    bodyStr := string(bodyData)
+	if resp.StatusCode > 399 {
+		return "", fmt.Errorf("Got response status %q with body %q", resp.Status, bodyStr)
+	}
+	return bodyStr, nil
 }

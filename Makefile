@@ -15,6 +15,9 @@ MAINSERVICEIMAGE = watermelon-mainservice
 MAINSERVICEPROXYIMAGE = watermelon-mainserviceproxy
 CLICKHOUSEIMAGE = clickhouse-exposed
 
+CLIENTPATH = ./cmd/client
+CLIENTEXEC = ./cmd/client/client
+
 build: build_email_service build_main_service build_main_service_proxy
 
 build_email_service:
@@ -53,7 +56,7 @@ clean_images:
 	docker rmi $$(docker images --filter "dangling=true" -q --no-trunc)
 
 clean_executables:
-	rm -rf $(EMAILSERVICEEXEC) $(MAINSERVICEEXEC) $(MAINSERVICEPROXYEXEC)
+	rm -rf $(EMAILSERVICEEXEC) $(MAINSERVICEEXEC) $(MAINSERVICEPROXYEXEC) $(CLIENTEXEC)
 
 clean: clean_executables clean_images
 
@@ -62,5 +65,8 @@ containers_up:
 
 containers_down:
 	docker-compose down
+
+build_client:
+	go build -o $(CLIENTEXEC) $(CLIENTPATH) 
 
 rebuild: clean build
