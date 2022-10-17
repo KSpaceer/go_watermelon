@@ -204,6 +204,7 @@ outer:
 			return
 		}
 	}
+    s.SendDailyMessagesToAllUsers()
 	ticker := time.NewTicker(deliveryInterval)
 	defer ticker.Stop()
 	for {
