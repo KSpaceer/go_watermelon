@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/xhit/go-simple-mail/v2"
 
@@ -122,6 +123,8 @@ func NewEmailServer(emailInfoFilePath, mainServiceLocation, imageDirectory strin
 	s.ConsumerGroup = cg
 
 	s.connLimiter = make(chan struct{}, maxConns)
+
+	rand.Seed(time.Now().UnixNano()) // for random selection of images
 	return s, nil
 }
 
