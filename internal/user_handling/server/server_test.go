@@ -261,6 +261,7 @@ func TestDailyMessagesToAllUsers(t *testing.T) {
 	for i := 0; i < expectedFailCount; i++ {
 		mockProducer.ExpectSendMessageAndSucceed() // logging errors
 	}
+	mockProducer.ExpectSendMessageAndSucceed() // logging
 	uhServer.SendDailyMessagesToAllUsers()
 	mockData.AssertExpectations(t)
 }

@@ -182,6 +182,7 @@ func (s *UserHandlingServer) SendDailyMessagesToAllUsers() {
 		}(user)
 	}
 	wg.Wait()
+	s.Info().Msgf("Finished sending messages. Next delivery will be in %s", deliveryInterval)
 }
 
 // DailyDelivery waits for the time of delivery, then sends messages to all users with
@@ -194,7 +195,9 @@ func (s *UserHandlingServer) DailyDelivery(wg *sync.WaitGroup, cancelChan <-chan
 	for deliveryTime.Before(curTime) {
 		deliveryTime.Add(deliveryInterval)
 	}
-	waitTimer := time.NewTimer(deliveryTime.Sub(curTime))
+	willDeliverIn := deliveryTime.Sub(curTime)
+	waitTimer := time.NewTimer(willDeliverIn)
+	s.Info().Msgf("Next delivery time will be in %s.", willDeliverIn)
 outer:
 	for {
 		select {
@@ -204,7 +207,7 @@ outer:
 			return
 		}
 	}
-    s.SendDailyMessagesToAllUsers()
+	s.SendDailyMessagesToAllUsers()
 	ticker := time.NewTicker(deliveryInterval)
 	defer ticker.Stop()
 	for {
