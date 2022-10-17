@@ -93,11 +93,14 @@ func main() {
 	if err := uhs.SetDeliveryTime(deliveryTime); err != nil {
 		log.Fatal().Err(err).Msg("Couldn't set new delivery time.")
 	}
+	h, m, s := uhs.GetDeliveryTime()
+	log.Info().Msgf("Set delivery time: %d:%d:%d", h, m, s)
 
 	deliveryInterval := os.Getenv(deliveryIntervalEnvVar)
 	if err := uhs.SetDeliveryInterval(deliveryInterval); err != nil {
 		log.Fatal().Err(err).Msg("Couldn't set new delivery interval.")
 	}
+	log.Info().Msgf("Set delivery interval: %s", uhs.GetDeliveryInterval())
 
 	uhServer := uhs.NewUserHandlingServer(dataHandler, mbProducer)
 	uhServer.Info().Msg("Created a new UserHandlingServer instance.")
