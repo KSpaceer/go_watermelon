@@ -270,7 +270,7 @@ func (s *EmailServer) chooseRandomImg() (string, error) {
 	}
 	result, err := filepath.Abs(filepath.Join(s.imageDirectory, selectedFile.Name()))
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 	return result, nil
 }

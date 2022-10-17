@@ -22,7 +22,7 @@ const (
 var (
 	emailInfoFilePath   = flag.String("email-info-file", "./emailinfo.csv", "Email info file")
 	mainServiceLocation = flag.String("main-service-location", "localhost:8081", "Main service URL")
-	imageDirectory      = flag.String("image-directory", "/img", "Image directory")
+	imageDirectory      = flag.String("image-directory", "./img", "Image directory")
 	messageBrokersAddrs = flag.String("brokers-addresses", "kafka-1:9092,kafka-2:9092", "Message brokers addresses")
 )
 
