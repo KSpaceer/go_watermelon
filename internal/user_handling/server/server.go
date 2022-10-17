@@ -191,7 +191,7 @@ func (s *UserHandlingServer) DailyDelivery(wg *sync.WaitGroup, cancelChan <-chan
 	defer wg.Done()
 	curTime := time.Now()
 	deliveryTime := time.Date(curTime.Year(), curTime.Month(), curTime.Day(), deliveryHour,
-		deliveryMinute, deliverySecond, 0, curTime.Location())
+		deliveryMinute, deliverySecond, 0, time.Local)
 	for deliveryTime.Before(curTime) {
 		deliveryTime.Add(deliveryInterval)
 	}
