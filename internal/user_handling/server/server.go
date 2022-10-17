@@ -21,13 +21,6 @@ import (
 )
 
 const (
-	// delivery* consts are used to define the time
-	// for sending daily message to users.
-	deliveryHour                   = 12
-	deliveryMinute                 = 0
-	deliverySecond                 = 0
-	deliveryInterval time.Duration = 24 * time.Hour
-
 	// ctxTimeout is used to make a context with timeout of given time.
 	ctxTimeout time.Duration = 3 * time.Second
 )
@@ -192,7 +185,7 @@ func (s *UserHandlingServer) SendDailyMessagesToAllUsers() {
 }
 
 // DailyDelivery waits for the time of delivery, then sends messages to all users with
-// constant period of time.
+// constant period of time. delivery* variables are defines in delivery_time.go.
 func (s *UserHandlingServer) DailyDelivery(wg *sync.WaitGroup, cancelChan <-chan struct{}) {
 	defer wg.Done()
 	curTime := time.Now()

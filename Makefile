@@ -61,7 +61,7 @@ clean_executables:
 clean: clean_executables clean_images
 
 containers_up:
-	HOST_EXTERNAL_IP=$$(curl ifconfig.me) docker-compose up
+	GWM_DELIVERY_TIME="" GWM_DELIVERY_INTERVAL="" GWM_HOST_EXTERNAL_IP=$$(curl ifconfig.me) docker-compose up
 
 containers_down:
 	docker-compose down

@@ -36,7 +36,7 @@ const (
 	// emailInfoFieldAmount is used to count necessary fields of SMTPServer
 	emailInfoFieldAmount = 4
 	// hostIP is the name of environment variable with external IP of host machine.
-	hostIP = "HOST_EXTERNAL_IP"
+	hostIP = "GWM_HOST_EXTERNAL_IP"
 )
 
 var (

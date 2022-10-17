@@ -31,11 +31,11 @@ func addUserCall(nickname, email, mainServiceLocation string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-    bodyData, err := io.ReadAll(resp.Body)
+	bodyData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
-    bodyStr := string(bodyData)
+	bodyStr := string(bodyData)
 	if resp.StatusCode > 399 {
 		return "", fmt.Errorf("Got response status %q with body %q", resp.Status, bodyStr)
 	}
@@ -54,11 +54,11 @@ func deleteUserCall(nickname, mainServiceLocation string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-    bodyData, err := io.ReadAll(resp.Body)
+	bodyData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
-    bodyStr := string(bodyData)
+	bodyStr := string(bodyData)
 	if resp.StatusCode > 399 {
 		return "", fmt.Errorf("Got response status %q with body %q", resp.Status, bodyStr)
 	}
@@ -76,7 +76,7 @@ func listUsersCall(mainServiceLocation string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-    bodyStr := string(bodyData)
+	bodyStr := string(bodyData)
 	if resp.StatusCode > 399 {
 		return "", fmt.Errorf("Got response status %q with body %q", resp.Status, bodyStr)
 	}

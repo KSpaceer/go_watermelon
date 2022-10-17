@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -20,8 +21,10 @@ import (
 )
 
 const (
-	timeoutStep     time.Duration = 500 * time.Millisecond
-	connectAttempts               = 4
+	timeoutStep            time.Duration = 500 * time.Millisecond
+	connectAttempts                      = 4
+	deliveryTimeEnvVar                   = "GWM_DELIVERY_TIME"
+	deliveryIntervalEnvVar               = "GWM_DELIVERY_INTERVAL"
 )
 
 var (
@@ -85,6 +88,16 @@ func main() {
 		log.Fatal().Err(err).Msg("All attempts to connect to message broker have failed.")
 	}
 	defer mbProducer.Close()
+
+	deliveryTime := os.Getenv(deliveryTimeEnvVar)
+	if err := uhs.SetDeliveryTime(deliveryTime); err != nil {
+		log.Fatal().Err(err).Msg("Couldn't set new delivery time.")
+	}
+
+	deliveryInterval := os.Getenv(deliveryIntervalEnvVar)
+	if err := uhs.SetDeliveryInterval(deliveryInterval); err != nil {
+		log.Fatal().Err(err).Msg("Couldn't set new delivery interval.")
+	}
 
 	uhServer := uhs.NewUserHandlingServer(dataHandler, mbProducer)
 	uhServer.Info().Msg("Created a new UserHandlingServer instance.")

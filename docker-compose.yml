@@ -87,6 +87,9 @@ services:
     mainservice:
         image: watermelon-mainservice
         restart: always
+        environment:
+            GWM_DELIVERY_TIME:
+            GWM_DELIVERY_INTERVAL:
         depends_on:
             - kafka-1
             - kafka-2
@@ -99,7 +102,7 @@ services:
         image: watermelon-emailservice
         restart: always
         environment:
-            HOST_EXTERNAL_IP:
+            GWM_HOST_EXTERNAL_IP:
         depends_on:
             - kafka-1
             - kafka-2
