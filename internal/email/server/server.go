@@ -113,7 +113,7 @@ func NewEmailServer(emailInfoFilePath, mainServiceLocation, imageDirectory strin
 		return nil, err
 	} else if !info.IsDir() {
 		return nil, fmt.Errorf("%s is not a directory.", imageDirectory)
-	}
+	} 
 
     s.imageDirectory = imageDirectory
 
@@ -265,7 +265,9 @@ func (s *EmailServer) chooseRandomImg() (string, error) {
 	images, err := os.ReadDir(s.imageDirectory)
 	if err != nil {
 		return "", err
-	}
+	} else if len(images) <= 0 {
+        return "", fmt.Errorf("There are no files in directory %q", s.imageDirectory)
+    }
 	selectedFile := images[rand.Intn(len(images))]
 	for selectedFile.IsDir() {
 		selectedFile = images[rand.Intn(len(images))]
