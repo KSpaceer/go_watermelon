@@ -1,6 +1,7 @@
 package email_server
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -9,6 +10,7 @@ import (
 )
 
 func TestDefineMainServiceLocationLocalhost(t *testing.T) {
+	os.Setenv(hostIP, "127.0.0.1")
 	testHost := "localhost"
 	eServer := EmailServer{}
 	addr, err := eServer.defineMainServiceLocation(testHost)

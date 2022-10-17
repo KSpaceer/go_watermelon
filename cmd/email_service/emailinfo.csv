@@ -1,0 +1,2 @@
+Host,Port,Username,Password
+smtp.example.com,587,example@example.com,examplepassword

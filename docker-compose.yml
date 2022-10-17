@@ -98,6 +98,8 @@ services:
     emailservice:
         image: watermelon-emailservice
         restart: always
+        environment:
+            HOST_EXTERNAL_IP:
         depends_on:
             - kafka-1
             - kafka-2

@@ -31,7 +31,7 @@ func createConsumerGroup(addrs []string, conf *sarama.Config) (sarama.ConsumerGr
 	timeout := timeoutStep
 	for i := 0; i < connectAttempts; i++ {
 		log.Info().Msg("Creating a consumer group in message broker...")
-        var consumerGroup sarama.ConsumerGroup
+		var consumerGroup sarama.ConsumerGroup
 		consumerGroup, err = sarama.NewConsumerGroup(addrs, "emailsend", conf)
 		if err == nil {
 			log.Info().Msg("Successfully created a consumer group.")

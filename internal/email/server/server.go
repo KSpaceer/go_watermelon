@@ -2,11 +2,11 @@ package email_server
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/csv"
 	"fmt"
 	"io"
 	"math/rand"
-	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -35,6 +35,8 @@ const (
 	dailyMsgSubjectName = "Daily watermelon"
 	// emailInfoFieldAmount is used to count necessary fields of SMTPServer
 	emailInfoFieldAmount = 4
+	// hostIP is the name of environment variable with external IP of host machine.
+	hostIP = "HOST_EXTERNAL_IP"
 )
 
 var (
@@ -142,18 +144,12 @@ func (s *EmailServer) SubscribeToTopics(ctx context.Context) error {
 // defineMainServiceLocation replaces "localhost" with external IP. Otherwise it returns given string.
 func (s *EmailServer) defineMainServiceLocation(mainServiceLocation string) (string, error) {
 	if strings.HasPrefix(mainServiceLocation, "localhost") {
-		interfaceAddresses, err := net.InterfaceAddrs()
-		if err != nil {
-			return "", err
+		ip := os.Getenv(hostIP)
+		if ip == "" {
+			return "", fmt.Errorf("Main service is ran on the same host, but no external path provided in environment"+
+				" variable %q", hostIP)
 		}
-		for _, interfaceAddr := range interfaceAddresses {
-			networkIP, ok := interfaceAddr.(*net.IPNet)
-			if ok && !networkIP.IP.IsLoopback() && networkIP.IP.To4() != nil {
-				ip := networkIP.IP.String()
-				return "http://" + ip + strings.TrimPrefix(mainServiceLocation, "localhost") + "/", nil
-			}
-		}
-		return "", fmt.Errorf("Main service is supposed to be ran on localhost, but there is no external IP.")
+		return "http://" + ip + strings.TrimPrefix(mainServiceLocation, "localhost"), nil
 	} else if _, err := url.ParseRequestURI(mainServiceLocation); err != nil {
 		return "", err
 	}
@@ -203,6 +199,7 @@ func (s *EmailServer) readEmailInfoFile(emailInfoFilePath string) error {
 		return fmt.Errorf("Invalid file %q: expected %d fields of info to parse, got %d.", emailInfoFilePath, emailInfoFieldAmount, infoCount)
 	}
 	s.SMTPServer.Encryption = mail.EncryptionSTARTTLS
+	s.SMTPServer.TLSConfig = &tls.Config{InsecureSkipVerify: true}
 	return nil
 }
 
@@ -301,20 +298,28 @@ func (s *EmailServer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sa
 		case sc.AuthTopic:
 			authInfo := strings.Split(string(message.Value), " ")
 			go func() {
+				s.Info().Msg("Waiting for opening a connection...")
 				s.connLimiter <- struct{}{}
+				s.Info().Msgf("Connecting and sending an auth message with method %q to email %q", authInfo[2], authInfo[0])
 				err := s.SendAuthMessage(authInfo[0], authInfo[1], authInfo[2])
 				if err != nil {
 					s.Error().Msgf("Occured while sending an auth message: %v", err)
+				} else {
+					s.Info().Msg("Successfully sent an email message.")
 				}
 				<-s.connLimiter
 			}()
 		case sc.DailyDeliveryTopic:
 			userInfo := strings.Split(string(message.Value), " ")
 			go func() {
+				s.Info().Msg("Waiting for opening a connection...")
 				s.connLimiter <- struct{}{}
+				s.Info().Msgf("Connecting and sending a daily message to email %q", userInfo[0])
 				err := s.SendDailyMessage(userInfo[0], userInfo[1])
 				if err != nil {
 					s.Error().Msgf("Occured while sending a daily message: %v", err)
+				} else {
+					s.Info().Msg("Successfully sent an email message.")
 				}
 				<-s.connLimiter
 			}()

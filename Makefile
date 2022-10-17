@@ -49,7 +49,18 @@ test:
 fmt:
 	go fmt ./cmd/... ./internal/...
 
-clean:
+clean_images:
+	docker rmi $$(docker images --filter "dangling=true" -q --no-trunc)
+
+clean_executables:
 	rm -rf $(EMAILSERVICEEXEC) $(MAINSERVICEEXEC) $(MAINSERVICEPROXYEXEC)
+
+clean: clean_executables clean_images
+
+containers_up:
+	HOST_EXTERNAL_IP=$$(curl ifconfig.me) docker-compose up
+
+containers_down:
+	docker-compose down
 
 rebuild: clean build
