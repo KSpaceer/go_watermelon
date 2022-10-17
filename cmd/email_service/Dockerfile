@@ -2,9 +2,9 @@ FROM scratch
 
 EXPOSE 587
 
-COPY ./emailinfo.csv ./
-COPY ./email_service ./
+COPY ./emailinfo.csv /
+COPY ./email_service /
 
-VOLUME ../../img ./img
+VOLUME /img
 
-ENTRYPOINT ["./email_service"]
+ENTRYPOINT ["/email_service"]
