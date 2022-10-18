@@ -47,7 +47,7 @@ UserHandling has 4 methods to be called:
 
 There are three services in this project:
 - ### Main service
-Implements UserHandling service and also manages data resources(PostgreSQL database and Redis cache). It executed called procedures and sends messages with Kafka to email service, if necessary. When the chosen delivery time comes(first time) or delivery interval passes, it sends request to the email service to send a daily message.
+Implements UserHandling service and also manages data resources(PostgreSQL database and Redis cache). It executed called procedures and sends messages with Kafka to email service, if necessary. When the chosen delivery time comes(first time) or delivery interval passes, it sends request to the email service to send a daily message for each user in database.
 
 - ### Main service proxy
 Simply translates HTTP requests into gRPC.
@@ -55,7 +55,7 @@ Simply translates HTTP requests into gRPC.
 - ### Email service
 Manages mailing. When there is a request from the main service, it sends a message (auth or daily) using given email address over SMTP. Sending a daily message, the service also selects a random image of watermelons. 
 
-Besides, both main and email services write logs using Zerolog. Besides stderr writing, logger also produces log messages for Kafka, which are consumed by Clickhouse and stored.
+Besides, both main and email services write logs using Zerolog. With stderr writing, logger also produces log messages for Kafka, which are consumed by Clickhouse and stored.
 
 ## How to run
 We can run all necessary services separately, but there is a better and simplier way to do it - use Docker and Docker Compose. To run the project:
@@ -65,7 +65,3 @@ We can run all necessary services separately, but there is a better and simplier
 Need to say, you can specify the delivery time or interval. To do it, define environment variables "GWM\_DELIVERY\_TIME" and "GWM\_DELIVERY\_INTERVAL" respectively. GWM\_DELIVERY\_TIME must match format "HH:MM:SS". GWM\_DELIVERY\_INTERVAL must match Golang time.Duration string, i.e. decimal numbers with optional fraction followed by a unit suffix (e.g. 5h, 30m). The environment variables are already in Make target "containers\_up", so you can reassign them in Makefile.
 
 Because the email service references the main one, you also can set the host location of main service with variable GWM\_HOST\_EXTERNAL\_IP.
-
-
-
-
