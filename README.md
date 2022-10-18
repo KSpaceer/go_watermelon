@@ -35,7 +35,7 @@ My pet project created for learning and fun. Here I used a lot of technologies, 
 ## How does it work
 The project architecture is following:
 <div align="center">
-<img src="docs/assets/images/go_watermelon_base_architecture">
+<img src="docs/assets/images/go_watermelon_base_architecture.svg">
 </div>
 
 It based on gRPC and defined service (in internal/user\_handling/proto/users.proto) UserHandling.
