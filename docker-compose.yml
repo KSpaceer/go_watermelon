@@ -80,7 +80,7 @@ services:
             - kafka-2
         volumes:
             - ./dbdata/clickhouse/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
-            - ./dbdata/clickhouse:/var/lib/clickhouse/chdata
+            - ./dbdata/clickhouse/chdata:/var/lib/clickhouse
         ports:
             - 9000:9000
 
