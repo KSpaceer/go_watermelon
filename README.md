@@ -9,7 +9,7 @@ A bundle of services written in Go to provide a mailing of watermelon images.
 ## About
 My pet project created for learning and fun. Here I used a lot of technologies, such as:
 - **API**
-    - gRPC (Golang implementation [grpc-go](https://github.com/grpc/grpc-go)
+    - gRPC (Golang implementation [grpc-go](https://github.com/grpc/grpc-go))
     - [gRPC-Gateway](https://github.com/grpc-ecosystem/grpc-gateway)
 - **DB**
     - Redis with [go-redis client](https://github.com/go-redis/redis)
