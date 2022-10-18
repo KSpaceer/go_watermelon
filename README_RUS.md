@@ -35,7 +35,7 @@
 ## Как он работает
 Проект имеет следующую архитектуру:
 <div align="center">
-<img src="docs/assets/images/go_watermelon_base_architecture">
+<img src="docs/assets/images/go_watermelon_base_architecture.svg">
 </div>
 
 Он основан на gRPC и определенном мною сервисе (в файле internal/user\_handling/proto/users.proto) UserHandling.
