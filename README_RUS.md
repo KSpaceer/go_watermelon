@@ -9,7 +9,7 @@
 ## О проекте
 Это мой пет-проект, созданный чисто ради обучения и веселья. В нем я использовал разные технологии, вроде
 - **API**
-    - gRPC (Реализация на Go [grpc-go](https://github.com/grpc/grpc-go)
+    - gRPC (Реализация на Go [grpc-go](https://github.com/grpc/grpc-go))
     - [gRPC-Gateway](https://github.com/grpc-ecosystem/grpc-gateway)
 - **Базы данных**
     - Redis с помощью клиента [go-redis](https://github.com/go-redis/redis)
