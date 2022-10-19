@@ -27,17 +27,28 @@ import (
 const (
 	// maxConns is used to limit currently active SMTP connections.
 	maxConns = 10
+
 	// watermelonImgMailName defines the name of attached file.
 	watermelonImgMailName = "watermelon"
+
 	// dailyDeliveryMethodName represents a key to msgTemplates for value of daily message.
 	dailyDeliveryMethodName = "sendWatermelon"
+
 	// *SubjectName consts define subject name for different types of messages
 	authMsgSubjectName  = "Confirm action"
 	dailyMsgSubjectName = "Daily watermelon"
+
 	// emailInfoFieldAmount is used to count necessary fields of SMTPServer
 	emailInfoFieldAmount = 4
+
 	// hostIP is the name of environment variable with external IP of host machine.
 	hostIP = "GWM_HOST_EXTERNAL_IP"
+
+    // timeoutStep defines initial timeout and its' further increment with every operation attempt.
+    timeoutStep time.Duration = 1 * time.Second
+
+    // sendAttemptsAmount defines a number of attempts for sending an email before failing.
+    sendAttemptsAmount = 5
 )
 
 var (
@@ -208,10 +219,45 @@ func (s *EmailServer) readEmailInfoFile(emailInfoFilePath string) error {
 	return nil
 }
 
+// createSMTPClient tries to create a SMTP client for several attempts.
+// If all attempts have failed, returns last error.
+func (s *EmailServer) createSMTPClient(email string) (*mail.SMTPClient, error) {
+    var client *mail.SMTPClient
+    var err error
+    timeout := timeoutStep
+    for i := 0; i < sendAttemptsAmount; i++ {
+        client, err = s.Connect()
+        if err == nil {
+            return client, nil
+        }
+        s.Error().Msgf("Can't create SMTP client for sending email to %q: %v", email, err)
+        time.Sleep(timeout)
+        timeout += timeoutStep
+    }
+    return nil, err
+}
+
+// sendMessage tries to send the message with given SMTP client.
+// If all attempts have failed, returns last error.
+func (s *EmailServer) sendMessage(msg *mail.Email, client *mail.SMTPClient, email string) error {
+    var err error
+    timeout := timeoutStep
+    for i := 0; i < sendAttemptsAmount; i++ {
+        err = msg.Send(client)
+        if err == nil {
+            return nil
+        }
+        s.Error().Msgf("Can't send email to %q: %v", email, err)
+        time.Sleep(timeout)
+        timeout += timeoutStep
+    }
+    return err
+}
+
 // SendAuthMessage creates a new SMTP connection through which sends a new auth message
 // using given email.
 func (s *EmailServer) SendAuthMessage(email, key, method string) error {
-	client, err := s.Connect()
+    client, err := s.createSMTPClient(email)
 	if err != nil {
 		return err
 	}
@@ -223,11 +269,8 @@ func (s *EmailServer) SendAuthMessage(email, key, method string) error {
 	if msg.Error != nil {
 		return msg.Error
 	}
-	err = msg.Send(client)
-	if err != nil {
-		return err
-	}
-	return nil
+    err = s.sendMessage(msg, client, email)
+	return err
 }
 
 // makeAuthMessage puts given key and method into template's placeholders.
@@ -242,7 +285,7 @@ func (s *EmailServer) SendDailyMessage(email, nickname string) error {
 	if err != nil {
 		return err
 	}
-	client, err := s.Connect()
+	client, err := s.createSMTPClient(email)
 	if err != nil {
 		return err
 	}
@@ -256,11 +299,8 @@ func (s *EmailServer) SendDailyMessage(email, nickname string) error {
 	if msg.Error != nil {
 		return msg.Error
 	}
-	err = msg.Send(client)
-	if err != nil {
-		return err
-	}
-	return nil
+	err = s.sendMessage(msg, client, email)
+	return err
 }
 
 // chooseRandomImg picks a random image from imageDirectory.
@@ -310,7 +350,7 @@ func (s *EmailServer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sa
 				s.Info().Msgf("Connecting and sending an auth message with method %q to email %q", authInfo[2], authInfo[0])
 				err := s.SendAuthMessage(authInfo[0], authInfo[1], authInfo[2])
 				if err != nil {
-					s.Error().Msgf("Occured while sending an auth message: %v", err)
+					s.Error().Msgf("All attempts to send a message have failed: %v", err)
 				} else {
 					s.Info().Msg("Successfully sent an email message.")
 				}
@@ -324,7 +364,7 @@ func (s *EmailServer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sa
 				s.Info().Msgf("Connecting and sending a daily message to email %q", userInfo[0])
 				err := s.SendDailyMessage(userInfo[0], userInfo[1])
 				if err != nil {
-					s.Error().Msgf("Occured while sending a daily message: %v", err)
+					s.Error().Msgf("All attempts to send a message have failed: %v", err)
 				} else {
 					s.Info().Msg("Successfully sent an email message.")
 				}
