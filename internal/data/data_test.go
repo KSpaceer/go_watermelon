@@ -110,10 +110,69 @@ func TestSetOperationSuccess(t *testing.T) {
 	}
 }
 
+func TestGetEmailByNicknameCacheHit(t *testing.T) {
+	cache, cacheMock := redismock.NewClientMock()
+	testNickname := "averageTeaEnjoyer"
+	testEmail := "gigachad@example.com"
+	cacheMock.ExpectGet(testNickname).SetVal(testEmail)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	d := &postgresRedisData{}
+	d.cache = cache
+	email, err := d.GetEmailByNickname(ctx, testNickname)
+	if assert.Nil(t, err) {
+		assert.Equal(t, testEmail, email)
+	}
+}
+
+func TestGetEmailByNicknameCacheMiss(t *testing.T) {
+	cache, cacheMock := redismock.NewClientMock()
+	db, dbMock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("Error \"%v\" was not expected while opening a mock database connection", err)
+	}
+	d := &postgresRedisData{}
+	d.cache = cache
+	d.db = db
+	testNickname := "PatrickBateman"
+	testEmail := "americanpsycho@gmail.com"
+	cacheMock.ExpectGet(testNickname).RedisNil()
+	rows := sqlmock.NewRows([]string{"email"}).AddRow(testEmail)
+	dbMock.ExpectQuery(regexp.QuoteMeta(`SELECT email FROM Users WHERE nickname = $1`)).WithArgs(testNickname).WillReturnRows(rows).RowsWillBeClosed()
+	cacheMock.ExpectSet(testNickname, testEmail, cacheExpiration).SetVal("success")
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	email, err := d.GetEmailByNickname(ctx, testNickname)
+	if assert.Nil(t, err) {
+		assert.Equal(t, testEmail, email)
+	}
+}
+
+func TestGetEmailByNicknameNotExists(t *testing.T) {
+	cache, cacheMock := redismock.NewClientMock()
+	db, dbMock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("Error \"%v\" was not expected while opening a mock database connection", err)
+	}
+	d := &postgresRedisData{}
+	d.cache = cache
+	d.db = db
+	testNickname := "Moon"
+	cacheMock.ExpectGet(testNickname).RedisNil()
+	rows := sqlmock.NewRows([]string{"email"})
+	dbMock.ExpectQuery(regexp.QuoteMeta(`SELECT email FROM Users WHERE nickname = $1`)).WithArgs(testNickname).WillReturnRows(rows).RowsWillBeClosed()
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	email, err := d.GetEmailByNickname(ctx, testNickname)
+	if assert.Nil(t, err) {
+		assert.Equal(t, "", email)
+	}
+}
+
 func TestCheckNicknameInDatabaseCacheHit(t *testing.T) {
 	cache, cacheMock := redismock.NewClientMock()
 	testNickname := "Aboba"
-	cacheMock.ExpectGet(testNickname).SetVal("true")
+	cacheMock.ExpectGet(testNickname).SetVal("aboba@gmail.com")
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	d := &postgresRedisData{}
@@ -134,10 +193,11 @@ func TestCheckNicknameInDatabaseCacheMiss(t *testing.T) {
 	d.cache = cache
 	d.db = db
 	testNickname := "ThomasShelby"
+	testEmail := "peakyblinders@example.com"
 	cacheMock.ExpectGet(testNickname).RedisNil()
-	rows := sqlmock.NewRows([]string{"nickname"}).AddRow(testNickname)
-	dbMock.ExpectQuery(regexp.QuoteMeta(`SELECT nickname FROM Users WHERE nickname = $1`)).WithArgs(testNickname).WillReturnRows(rows).RowsWillBeClosed()
-	cacheMock.ExpectSet(testNickname, true, cacheExpiration).SetVal("success")
+	rows := sqlmock.NewRows([]string{"email"}).AddRow(testEmail)
+	dbMock.ExpectQuery(regexp.QuoteMeta(`SELECT email FROM Users WHERE nickname = $1`)).WithArgs(testNickname).WillReturnRows(rows).RowsWillBeClosed()
+	cacheMock.ExpectSet(testNickname, testEmail, cacheExpiration).SetVal("success")
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	result, err := d.CheckNicknameInDatabase(ctx, testNickname)
@@ -157,9 +217,9 @@ func TestCheckNicknameInDatabaseNotExists(t *testing.T) {
 	d.db = db
 	testNickname := "WatermelonHater"
 	cacheMock.ExpectGet(testNickname).RedisNil()
-	rows := sqlmock.NewRows([]string{"nickname"})
-	dbMock.ExpectQuery(regexp.QuoteMeta(`SELECT nickname FROM Users WHERE nickname = $1`)).WithArgs(testNickname).WillReturnRows(rows).RowsWillBeClosed()
-	cacheMock.ExpectSet(testNickname, false, cacheExpiration).SetVal("success")
+	rows := sqlmock.NewRows([]string{"email"})
+	dbMock.ExpectQuery(regexp.QuoteMeta(`SELECT email FROM Users WHERE nickname = $1`)).WithArgs(testNickname).WillReturnRows(rows).RowsWillBeClosed()
+	cacheMock.ExpectSet(testNickname, "", cacheExpiration).SetVal("success")
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	result, err := d.CheckNicknameInDatabase(ctx, testNickname)

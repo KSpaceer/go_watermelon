@@ -43,6 +43,11 @@ func (d *MockData) SetOperation(ctx context.Context, user data.User, method stri
 	return args.String(0), args.Error(1)
 }
 
+func (d *MockData) GetEmailByNickname(ctx context.Context, nickname string) (string, error) {
+	args := d.Called(ctx, nickname)
+	return args.String(0), args.Error(1)
+}
+
 func (d *MockData) CheckNicknameInDatabase(ctx context.Context, nickname string) (bool, error) {
 	args := d.Called(ctx, nickname)
 	return args.Bool(0), args.Error(1)
@@ -206,7 +211,7 @@ func TestDeleteUserExists(t *testing.T) {
 	testKey := "S6FqubLd0KzKUebq9kG6t8Zv2JkKDCl43xkcDnXR68i1uFRKoWP6y6tT4DiMbVUR5qzKPHXKXA8jaZtv1O1hACtgNfd9sKP/zfum4UKMCEdiL6P+aNf7hbK78Pwi7hDx78SU8u1euxLpt/yraaYzO/2vt6QAN7+4yVja/5g3SQ0="
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	mockData.On("CheckNicknameInDatabase", ctx, testUser.Nickname).Return(true, nil)
+	mockData.On("GetEmailByNickname", ctx, testUser.Nickname).Return(testUser.Email, nil)
 	mockData.On("SetOperation", ctx, data.User{testUser.Nickname, testUser.Email}, "DELETE").Return(testKey, nil)
 	msgChecker := func(msg *sarama.ProducerMessage) error {
 		var err error
@@ -233,7 +238,7 @@ func TestDeleteUserNotExists(t *testing.T) {
 	testUser := &pb.User{Nickname: "AwfulWatermelon", Email: "bebe@gmail.com"}
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	mockData.On("CheckNicknameInDatabase", ctx, testUser.Nickname).Return(false, nil)
+	mockData.On("GetEmailByNickname", ctx, testUser.Nickname).Return("", nil)
 	response, err := uhServer.DeleteUser(ctx, testUser)
 	mockData.AssertExpectations(t)
 	assert.Nil(t, response)

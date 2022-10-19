@@ -48,6 +48,10 @@ type Data interface {
 	// returns true if there are any records.
 	CheckNicknameInDatabase(ctx context.Context, nickname string) (bool, error)
 
+	// GetEmailByNickname returns email responding to given nickname. If there is
+	// no nickname in database, returns empty string.
+	GetEmailByNickname(ctx context.Context, nickname string) (string, error)
+
 	// AddUserToDatabase adds new record to database using given user.
 	AddUserToDatabase(ctx context.Context, user User) error
 
@@ -193,20 +197,32 @@ func (d *postgresRedisData) SetOperation(ctx context.Context, user User, method 
 // checks cache. If there is no nickname in cache, the search continues in database. The database
 // result is cached and returned.
 func (d *postgresRedisData) CheckNicknameInDatabase(ctx context.Context, nickname string) (bool, error) {
-	result, err := d.cache.Get(ctx, nickname).Bool()
-	if err == redis.Nil {
-		rows, err := d.db.QueryContext(ctx, "SELECT nickname FROM Users WHERE nickname = $1", nickname)
-		if err != nil {
-			return false, err
-		}
-		defer rows.Close()
-		result = rows.Next()
-		d.cache.Set(ctx, nickname, result, cacheExpiration)
-		return result, nil
-	} else if err != nil {
-		return false, err
+	email, err := d.GetEmailByNickname(ctx, nickname)
+	if err != nil {
+		return false, nil
 	}
-	return result, err
+	return email != "", nil
+}
+
+// GetEmailByNickname gets email of a user by given nickname. In first place, it checks cache.
+// If there is no nickname in cache, the search continues in database. The database is cached.
+// If no such nickname found in database or cache, returns empty string.
+func (d *postgresRedisData) GetEmailByNickname(ctx context.Context, nickname string) (string, error) {
+	email, err := d.cache.Get(ctx, nickname).Result()
+	if err == redis.Nil {
+		row := d.db.QueryRowContext(ctx, "SELECT email FROM Users WHERE nickname = $1", nickname)
+		err = row.Scan(&email)
+		if err == sql.ErrNoRows {
+			email = ""
+		} else if err != nil {
+			return "", err
+		}
+		d.cache.Set(ctx, nickname, email, cacheExpiration)
+		return email, nil
+	} else if err != nil {
+		return "", err
+	}
+	return email, nil
 }
 
 // AddUserToDatabase adds new user record into database. It also deletes record with ListUsersKey

@@ -98,10 +98,10 @@ func (s *UserHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Re
 // the method sends an authenticating email (with help of the email service) using user's email address.
 func (s *UserHandlingServer) DeleteUser(ctx context.Context, user *pb.User) (*pb.Response, error) {
 	s.Info().Msgf("Got a call for DeleteUser method with nickname %q and email %q", user.Nickname, user.Email)
-	if ok, err := s.CheckNicknameInDatabase(ctx, user.Nickname); err != nil {
+	if email, err := s.GetEmailByNickname(ctx, user.Nickname); err != nil {
 		s.Error().Msgf("An error occured while executing database operation: %v", err)
 		return nil, err
-	} else if !ok {
+	} else if user.Email = email; email == "" {
 		return nil, fmt.Errorf("There is no user with such nickname.")
 	}
 	key, err := s.SetOperation(ctx, data.User{user.Nickname, user.Email}, "DELETE")
