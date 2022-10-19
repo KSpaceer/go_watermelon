@@ -44,11 +44,11 @@ const (
 	// hostIP is the name of environment variable with external IP of host machine.
 	hostIP = "GWM_HOST_EXTERNAL_IP"
 
-    // timeoutStep defines initial timeout and its' further increment with every operation attempt.
-    timeoutStep time.Duration = 1 * time.Second
+	// timeoutStep defines initial timeout and its' further increment with every operation attempt.
+	timeoutStep time.Duration = 1 * time.Second
 
-    // sendAttemptsAmount defines a number of attempts for sending an email before failing.
-    sendAttemptsAmount = 5
+	// sendAttemptsAmount defines a number of attempts for sending an email before failing.
+	sendAttemptsAmount = 5
 )
 
 var (
@@ -222,42 +222,42 @@ func (s *EmailServer) readEmailInfoFile(emailInfoFilePath string) error {
 // createSMTPClient tries to create a SMTP client for several attempts.
 // If all attempts have failed, returns last error.
 func (s *EmailServer) createSMTPClient(email string) (*mail.SMTPClient, error) {
-    var client *mail.SMTPClient
-    var err error
-    timeout := timeoutStep
-    for i := 0; i < sendAttemptsAmount; i++ {
-        client, err = s.Connect()
-        if err == nil {
-            return client, nil
-        }
-        s.Error().Msgf("Can't create SMTP client for sending email to %q: %v", email, err)
-        time.Sleep(timeout)
-        timeout += timeoutStep
-    }
-    return nil, err
+	var client *mail.SMTPClient
+	var err error
+	timeout := timeoutStep
+	for i := 0; i < sendAttemptsAmount; i++ {
+		client, err = s.Connect()
+		if err == nil {
+			return client, nil
+		}
+		s.Error().Msgf("Can't create SMTP client for sending email to %q: %v", email, err)
+		time.Sleep(timeout)
+		timeout += timeoutStep
+	}
+	return nil, err
 }
 
 // sendMessage tries to send the message with given SMTP client.
 // If all attempts have failed, returns last error.
 func (s *EmailServer) sendMessage(msg *mail.Email, client *mail.SMTPClient, email string) error {
-    var err error
-    timeout := timeoutStep
-    for i := 0; i < sendAttemptsAmount; i++ {
-        err = msg.Send(client)
-        if err == nil {
-            return nil
-        }
-        s.Error().Msgf("Can't send email to %q: %v", email, err)
-        time.Sleep(timeout)
-        timeout += timeoutStep
-    }
-    return err
+	var err error
+	timeout := timeoutStep
+	for i := 0; i < sendAttemptsAmount; i++ {
+		err = msg.Send(client)
+		if err == nil {
+			return nil
+		}
+		s.Error().Msgf("Can't send email to %q: %v", email, err)
+		time.Sleep(timeout)
+		timeout += timeoutStep
+	}
+	return err
 }
 
 // SendAuthMessage creates a new SMTP connection through which sends a new auth message
 // using given email.
 func (s *EmailServer) SendAuthMessage(email, key, method string) error {
-    client, err := s.createSMTPClient(email)
+	client, err := s.createSMTPClient(email)
 	if err != nil {
 		return err
 	}
@@ -269,7 +269,7 @@ func (s *EmailServer) SendAuthMessage(email, key, method string) error {
 	if msg.Error != nil {
 		return msg.Error
 	}
-    err = s.sendMessage(msg, client, email)
+	err = s.sendMessage(msg, client, email)
 	return err
 }
 
