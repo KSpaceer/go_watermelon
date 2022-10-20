@@ -14,48 +14,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCreateUsersTableSuccess(t *testing.T) {
-	db, dbMock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("Error \"%v\" was not expected while opening a mock database connection", err)
-	}
-	dbMock.ExpectExec(regexp.QuoteMeta(`CREATE TABLE IF NOT EXISTS Users (nickname TEXT,email TEXT,UNIQUE (nickname));`)).WillReturnError(nil).WillReturnResult(sqlmock.NewResult(1, 1))
-	d := &postgresRedisData{}
-	d.db = db
-	assert.Nil(t, d.createUsersTable())
-}
-
-func TestCreateUsersTableCreateTableFailed(t *testing.T) {
-	db, dbMock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("Error \"%v\" was not expected while opening a mock database connection", err)
-	}
-	mockError := fmt.Errorf("Failed to create table.")
-	dbMock.ExpectExec(regexp.QuoteMeta(`CREATE TABLE IF NOT EXISTS Users (nickname TEXT, email TEXT);`)).WillReturnError(mockError).WillReturnResult(sqlmock.NewResult(1, 1))
-	d := &postgresRedisData{}
-	d.db = db
-	assert.NotNil(t, d.createUsersTable())
-}
-
-func TestCreateUsersTableCreateIndexFailed(t *testing.T) {
-	db, dbMock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("Error \"%v\" was not expected while opening a mock database connection", err)
-	}
-	dbMock.ExpectExec(regexp.QuoteMeta(`CREATE TABLE IF NOT EXISTS Users (nickname TEXT, email TEXT);`)).WillReturnError(nil).WillReturnResult(sqlmock.NewResult(1, 1))
-	mockError := fmt.Errorf("Failed to create index.")
-	dbMock.ExpectExec(regexp.QuoteMeta(`CREATE UNIQUE INDEX IF NOT EXISTS nickname_idx ON Users(nickname);`)).WillReturnError(mockError).WillReturnResult(sqlmock.NewResult(1, 1))
-	d := &postgresRedisData{}
-	d.db = db
-	assert.NotNil(t, d.createUsersTable)
-}
-
 func TestGetOperationExistingKey(t *testing.T) {
 	cache, cacheMock := redismock.NewClientMock()
 	key := "lUQAbb59alonQuW4p3sqTxA_d9Fq5Jk7dkfd_GR43IdPPCxFzUvWmT4vy4GMkjj5udkSoJrZ5_NEqdeFN6aCRKuPvbZwdF3IQ-KRgRgwpfBIo0XVWBkKv1R5ZwL3CjPLJqzL8_VeeZx4ae0fHz5uqXjZ3vaExLZ6j3ZaL7-Kt9Y"
 	cacheMock.ExpectGet(key).SetVal(`{"user":{"nickname":"arbuz","email":"arbuz@gmail.com"},"method":"DELETE"}`)
-	d := &postgresRedisData{}
-	d.cache = cache
+	d := &dataHandler{}
+	d.cache = &RedisCache{cache}
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	operation, err := d.GetOperation(ctx, key)
@@ -68,8 +32,8 @@ func TestGetOperationNonexistingKey(t *testing.T) {
 	cache, cacheMock := redismock.NewClientMock()
 	key := "Idonotexist"
 	cacheMock.ExpectGet(key).RedisNil()
-	d := &postgresRedisData{}
-	d.cache = cache
+	d := &dataHandler{}
+	d.cache = &RedisCache{cache}
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	operation, err := d.GetOperation(ctx, key)
@@ -92,8 +56,8 @@ func TestSetOperationSuccess(t *testing.T) {
 	}
 	regexpStr := fmt.Sprintf(`.[%d]`, keySize)
 	cacheMock.ExpectSet(regexpStr, jsonData, authExpiration).SetVal("Success")
-	d := &postgresRedisData{}
-	d.cache = cache
+	d := &dataHandler{}
+	d.cache = &RedisCache{cache}
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -103,9 +67,8 @@ func TestSetOperationSuccess(t *testing.T) {
 		assert.True(t, pattern.MatchString(key))
 	}
 	cacheMock.ExpectGet(key).SetVal(jsonData)
-	result := d.cache.Get(ctx, key)
-	resultString, err := result.Result()
-	if assert.Nil(t, result.Err()) && assert.Nil(t, err) {
+	resultString, err := d.cache.Get(ctx, key)
+	if assert.Nil(t, err) {
 		assert.Equal(t, jsonData, resultString)
 	}
 }
@@ -117,8 +80,8 @@ func TestGetEmailByNicknameCacheHit(t *testing.T) {
 	cacheMock.ExpectGet(testNickname).SetVal(testEmail)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	d := &postgresRedisData{}
-	d.cache = cache
+	d := &dataHandler{}
+	d.cache = &RedisCache{cache}
 	email, err := d.GetEmailByNickname(ctx, testNickname)
 	if assert.Nil(t, err) {
 		assert.Equal(t, testEmail, email)
@@ -131,8 +94,8 @@ func TestGetEmailByNicknameCacheMiss(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error \"%v\" was not expected while opening a mock database connection", err)
 	}
-	d := &postgresRedisData{}
-	d.cache = cache
+	d := &dataHandler{}
+	d.cache = &RedisCache{cache}
 	d.db = db
 	testNickname := "PatrickBateman"
 	testEmail := "americanpsycho@gmail.com"
@@ -154,8 +117,8 @@ func TestGetEmailByNicknameNotExists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error \"%v\" was not expected while opening a mock database connection", err)
 	}
-	d := &postgresRedisData{}
-	d.cache = cache
+	d := &dataHandler{}
+	d.cache = &RedisCache{cache}
 	d.db = db
 	testNickname := "Moon"
 	cacheMock.ExpectGet(testNickname).RedisNil()
@@ -175,8 +138,8 @@ func TestCheckNicknameInDatabaseCacheHit(t *testing.T) {
 	cacheMock.ExpectGet(testNickname).SetVal("aboba@gmail.com")
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	d := &postgresRedisData{}
-	d.cache = cache
+	d := &dataHandler{}
+	d.cache = &RedisCache{cache}
 	result, err := d.CheckNicknameInDatabase(ctx, testNickname)
 	if assert.Nil(t, err) {
 		assert.True(t, result)
@@ -189,8 +152,8 @@ func TestCheckNicknameInDatabaseCacheMiss(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error \"%v\" was not expected while opening a mock database connection", err)
 	}
-	d := &postgresRedisData{}
-	d.cache = cache
+	d := &dataHandler{}
+	d.cache = &RedisCache{cache}
 	d.db = db
 	testNickname := "ThomasShelby"
 	testEmail := "peakyblinders@example.com"
@@ -212,8 +175,8 @@ func TestCheckNicknameInDatabaseNotExists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error \"%v\" was not expected while opening a mock database connection", err)
 	}
-	d := &postgresRedisData{}
-	d.cache = cache
+	d := &dataHandler{}
+	d.cache = &RedisCache{cache}
 	d.db = db
 	testNickname := "WatermelonHater"
 	cacheMock.ExpectGet(testNickname).RedisNil()
@@ -234,8 +197,8 @@ func TestAddUserToDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error \"%v\" was not expected while opening a mock database connection", err)
 	}
-	d := &postgresRedisData{}
-	d.cache = cache
+	d := &dataHandler{}
+	d.cache = &RedisCache{cache}
 	d.db = db
 	testUser := User{"Newbie", "nwb@example.com"}
 	dbMock.ExpectExec(regexp.QuoteMeta(`INSERT INTO Users VALUES ($1, $2)`)).WithArgs(testUser.Nickname, testUser.Email).WillReturnResult(sqlmock.NewResult(1, 1))
@@ -252,8 +215,8 @@ func TestDeleteUserFromDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error \"%v\" was not expected while opening a mock database connection", err)
 	}
-	d := &postgresRedisData{}
-	d.cache = cache
+	d := &dataHandler{}
+	d.cache = &RedisCache{cache}
 	d.db = db
 	testUser := User{"Old", "old@example.com"}
 	dbMock.ExpectExec(regexp.QuoteMeta(`DELETE FROM Users WHERE nickname=$1 AND email=$2`)).WithArgs(testUser.Nickname, testUser.Email).WillReturnResult(sqlmock.NewResult(1, 1))
@@ -266,8 +229,8 @@ func TestDeleteUserFromDatabase(t *testing.T) {
 
 func TestGetUsersFromDatabaseCacheHit(t *testing.T) {
 	cache, cacheMock := redismock.NewClientMock()
-	d := &postgresRedisData{}
-	d.cache = cache
+	d := &dataHandler{}
+	d.cache = &RedisCache{cache}
 	cacheMock.ExpectGet(ListUsersKey).SetVal(`[{"nickname":"pupa","email":"buhga@gmail.com"},
                                                {"nickname":"lupa","email":"lteria@gmail.com"}]`)
 	testUsers := []User{{"pupa", "buhga@gmail.com"}, {"lupa", "lteria@gmail.com"}}
@@ -287,8 +250,8 @@ func TestGetUsersFromDatabaseCacheMiss(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error \"%v\" was not expected while opening a mock database connection", err)
 	}
-	d := &postgresRedisData{}
-	d.cache = cache
+	d := &dataHandler{}
+	d.cache = &RedisCache{cache}
 	d.db = db
 	cacheMock.ExpectGet(ListUsersKey).RedisNil()
 	rows := sqlmock.NewRows([]string{"nickname", "email"})
@@ -316,8 +279,8 @@ func TestGetUsersFromDatabaseEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error \"%v\" was not expected while opening a mock database connection", err)
 	}
-	d := &postgresRedisData{}
-	d.cache = cache
+	d := &dataHandler{}
+	d.cache = &RedisCache{cache}
 	d.db = db
 	cacheMock.ExpectGet(ListUsersKey).RedisNil()
 	rows := sqlmock.NewRows([]string{"nickname", "email"})

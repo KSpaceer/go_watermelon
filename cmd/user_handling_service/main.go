@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"net"
 	"os"
@@ -34,17 +35,36 @@ var (
 	messageBrokersAddrs = flag.String("brokers-addresses", "kafka-1:9092,kafka-2:9092", "Message brokers addresses")
 )
 
-func createDataHandler() (data.Data, error) {
+func createRedisCache() (data.Cache, error) {
 	var err error
 	timeout := timeoutStep
 	for i := 0; i < connectAttempts; i++ {
-		log.Info().Msg("Connecting to database and cache...")
-		dataHandler, err := data.NewPGSRedisData(*redisAddr, *pgsInfoFilePath)
+		log.Info().Msg("Connecting to cache...")
+		var cache data.Cache
+		cache, err = data.NewRedisCache(*redisAddr)
 		if err == nil {
-			log.Info().Msg("Successfully connected to database and cache.")
-			return dataHandler, nil
+			log.Info().Msg("Successfully connected to cache.")
+			return cache, nil
 		}
-		log.Error().Err(err).Msg("Occured while attempting to connect to database and cache.")
+		log.Error().Err(err).Msg("Occured while attempting to connect to cache.")
+		time.Sleep(timeout)
+		timeout += timeoutStep
+	}
+	return nil, err
+}
+
+func connectToDB() (*sql.DB, error) {
+	var err error
+	timeout := timeoutStep
+	for i := 0; i < connectAttempts; i++ {
+		log.Info().Msg("Connecting to database...")
+		var db *sql.DB
+		db, err = data.ConnectToPGS(*pgsInfoFilePath)
+		if err == nil {
+			log.Info().Msg("Successfully connected to database.")
+			return db, nil
+		}
+		log.Error().Err(err).Msg("Occured while attempting to connect to database.")
 		time.Sleep(timeout)
 		timeout += timeoutStep
 	}
@@ -74,10 +94,18 @@ func main() {
 
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
-	dataHandler, err := createDataHandler()
+	cache, err := createRedisCache()
 	if err != nil {
-		log.Fatal().Err(err).Msg("All attempts to connect to database and cache have failed.")
+		log.Fatal().Err(err).Msg("All attempts to connect to cache have failed.")
 	}
+
+	db, err := connectToDB()
+	if err != nil {
+		cache.Close()
+		log.Fatal().Err(err).Msg("All attempts to connect to database have failed.")
+	}
+
+	dataHandler := data.NewData(cache, db)
 	defer dataHandler.Disconnect()
 
 	producerConf := sarama.NewConfig()
