@@ -6,14 +6,10 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
-
-	"github.com/go-redis/redis/v8"
 )
 
 const (
@@ -63,10 +59,9 @@ type Data interface {
 	GetUsersFromDatabase(ctx context.Context) ([]User, error)
 }
 
-// postgresRedisData implements Data interface. It uses PostgreSQL
-// as database and Redis as cache
-type postgresRedisData struct {
-	cache *redis.Client
+// dataHandler implements Data interface and used as its basic implementation.
+type dataHandler struct {
+	cache Cache
 	db    *sql.DB
 }
 
@@ -83,80 +78,24 @@ type Operation struct {
 	Method string `json:"method"`
 }
 
-// NewPGSRedisData creates a new postgresRedisData instance using Redis cache address
-// and postgres DB info stored in a file. It also creates tables in database if
-// they don't already exist. Returns an error in case of falied connections.
-func NewPGSRedisData(redisAddress, pgsInfoFile string) (returnedD *postgresRedisData, returnedErr error) {
-	d := new(postgresRedisData)
-
-	d.cache = redis.NewClient(&redis.Options{
-		Addr:     redisAddress,
-		Password: "",
-		DB:       0,
-	})
-	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
-	defer cancel()
-	err := d.cache.Ping(ctx).Err()
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if returnedErr != nil {
-			d.cache.Close()
-		}
-	}()
-
-	if !filepath.IsAbs(pgsInfoFile) {
-		pgsInfoFile, err = filepath.Abs(pgsInfoFile)
-		if err != nil {
-			return nil, err
-		}
-	}
-	pgsInfo, err := os.ReadFile(pgsInfoFile)
-	if err != nil {
-		return nil, err
-	}
-
-	d.db, err = sql.Open("postgres", string(pgsInfo))
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if returnedErr != nil {
-			d.db.Close()
-		}
-	}()
-	if err := d.db.Ping(); err != nil {
-		return nil, err
-	}
-	if err := d.createUsersTable(); err != nil {
-		return nil, err
-	}
-
-	return d, nil
-}
-
-// createUsersTable creates Users table in PostgreSQL database.
-func (d *postgresRedisData) createUsersTable() error {
-	_, err := d.db.Exec(`CREATE TABLE IF NOT EXISTS Users (` +
-		`nickname TEXT,` +
-		`email TEXT,` +
-		`UNIQUE (nickname));`)
-	return err
+// NewData creates a new Data instance using given Cache
+// and DB.
+func NewData(cache Cache, db *sql.DB) *dataHandler {
+	return &dataHandler{cache, db}
 }
 
 // Disconnect closes connections to database and cache.
-func (d *postgresRedisData) Disconnect() {
+func (d *dataHandler) Disconnect() {
 	d.db.Close()
 	d.cache.Close()
 }
 
 // GetOperation gets JSON formatted value from cache by given key and returns decoded
 // data as Operation struct. If there is no such key in cache, return empty Operation struct.
-func (d *postgresRedisData) GetOperation(ctx context.Context, key string) (*Operation, error) {
-	jsonData, err := d.cache.Get(ctx, key).Result()
+func (d *dataHandler) GetOperation(ctx context.Context, key string) (*Operation, error) {
+	jsonData, err := d.cache.Get(ctx, key)
 	if err != nil {
-		if err == redis.Nil {
+		if err == CacheNil {
 			return &Operation{}, nil
 		} else {
 			return nil, err
@@ -173,7 +112,7 @@ func (d *postgresRedisData) GetOperation(ctx context.Context, key string) (*Oper
 // SetOperation composes given User and method into Operation, then encodes it into JSON formatted
 // string. After this a base64-encoded key is generated randomly. Then JSON string is inserted
 // into cache by the key.
-func (d *postgresRedisData) SetOperation(ctx context.Context, user User, method string) (string, error) {
+func (d *dataHandler) SetOperation(ctx context.Context, user User, method string) (string, error) {
 	opn := Operation{user, method}
 	buf := new(strings.Builder)
 	err := json.NewEncoder(buf).Encode(&opn)
@@ -186,7 +125,7 @@ func (d *postgresRedisData) SetOperation(ctx context.Context, user User, method 
 		return "", err
 	}
 	key := base64.URLEncoding.EncodeToString(keyBuf)
-	err = d.cache.Set(ctx, key, buf.String(), authExpiration).Err()
+	err = d.cache.Set(ctx, key, buf.String(), authExpiration)
 	if err != nil {
 		return "", err
 	}
@@ -196,7 +135,7 @@ func (d *postgresRedisData) SetOperation(ctx context.Context, user User, method 
 // CheckNicknameInDatabase checks whether the nickname in database or no. In first place, it
 // checks cache. If there is no nickname in cache, the search continues in database. The database
 // result is cached and returned.
-func (d *postgresRedisData) CheckNicknameInDatabase(ctx context.Context, nickname string) (bool, error) {
+func (d *dataHandler) CheckNicknameInDatabase(ctx context.Context, nickname string) (bool, error) {
 	email, err := d.GetEmailByNickname(ctx, nickname)
 	if err != nil {
 		return false, nil
@@ -207,9 +146,9 @@ func (d *postgresRedisData) CheckNicknameInDatabase(ctx context.Context, nicknam
 // GetEmailByNickname gets email of a user by given nickname. In first place, it checks cache.
 // If there is no nickname in cache, the search continues in database. The database is cached.
 // If no such nickname found in database or cache, returns empty string.
-func (d *postgresRedisData) GetEmailByNickname(ctx context.Context, nickname string) (string, error) {
-	email, err := d.cache.Get(ctx, nickname).Result()
-	if err == redis.Nil {
+func (d *dataHandler) GetEmailByNickname(ctx context.Context, nickname string) (string, error) {
+	email, err := d.cache.Get(ctx, nickname)
+	if err == CacheNil {
 		row := d.db.QueryRowContext(ctx, "SELECT email FROM Users WHERE nickname = $1", nickname)
 		err = row.Scan(&email)
 		if err == sql.ErrNoRows {
@@ -227,7 +166,7 @@ func (d *postgresRedisData) GetEmailByNickname(ctx context.Context, nickname str
 
 // AddUserToDatabase adds new user record into database. It also deletes record with ListUsersKey
 // from cache because its' value is outdated (if the insertion succeeds).
-func (d *postgresRedisData) AddUserToDatabase(ctx context.Context, user User) error {
+func (d *dataHandler) AddUserToDatabase(ctx context.Context, user User) error {
 	result, err := d.db.ExecContext(ctx, "INSERT INTO Users VALUES ($1, $2)", user.Nickname, user.Email)
 	if rows, err := result.RowsAffected(); err == nil && rows > 0 {
 		d.cache.Del(ctx, ListUsersKey)
@@ -237,7 +176,7 @@ func (d *postgresRedisData) AddUserToDatabase(ctx context.Context, user User) er
 
 // DeleteUserFromDatabase deletes records of user from database. In case of success, it also
 // deletes record with ListUsersKey from cache because its' value is outdated.
-func (d *postgresRedisData) DeleteUserFromDatabase(ctx context.Context, user User) error {
+func (d *dataHandler) DeleteUserFromDatabase(ctx context.Context, user User) error {
 	result, err := d.db.ExecContext(ctx, "DELETE FROM Users WHERE nickname=$1 AND email=$2", user.Nickname, user.Email)
 	if rows, err := result.RowsAffected(); err == nil && rows > 0 {
 		d.cache.Del(ctx, ListUsersKey)
@@ -247,10 +186,10 @@ func (d *postgresRedisData) DeleteUserFromDatabase(ctx context.Context, user Use
 
 // GetUsersFromDatabase gets all users records from database or cache and returns them as
 // User slice
-func (d *postgresRedisData) GetUsersFromDatabase(ctx context.Context) ([]User, error) {
+func (d *dataHandler) GetUsersFromDatabase(ctx context.Context) ([]User, error) {
 	var usersList []User
-	jsonData, err := d.cache.Get(ctx, ListUsersKey).Result()
-	if err == redis.Nil {
+	jsonData, err := d.cache.Get(ctx, ListUsersKey)
+	if err == CacheNil {
 		if usersList, err = d.cacheMiss(ctx); err != nil {
 			return nil, err
 		}
@@ -265,7 +204,7 @@ func (d *postgresRedisData) GetUsersFromDatabase(ctx context.Context) ([]User, e
 // cacheMiss is called when GetUsersFromDatabase didn't found record with ListUsersKey in cache.
 // It selects all rows from database and inserts them into User slice, then encodes the slice
 // into JSON string and adds it into cache. After this cacheMiss returns created User slice.
-func (d *postgresRedisData) cacheMiss(ctx context.Context) ([]User, error) {
+func (d *dataHandler) cacheMiss(ctx context.Context) ([]User, error) {
 	var usersList []User
 	rows, err := d.db.QueryContext(ctx, "SELECT nickname, email FROM Users")
 	defer rows.Close()
@@ -286,7 +225,7 @@ func (d *postgresRedisData) cacheMiss(ctx context.Context) ([]User, error) {
 	if err := json.NewEncoder(buf).Encode(&usersList); err != nil {
 		return nil, err
 	}
-	if err := d.cache.Set(ctx, ListUsersKey, buf.String(), cacheExpiration).Err(); err != nil {
+	if err := d.cache.Set(ctx, ListUsersKey, buf.String(), cacheExpiration); err != nil {
 		return nil, err
 	}
 	return usersList, nil
