@@ -80,7 +80,7 @@ type Operation struct {
 
 // NewData creates a new Data instance using given Cache
 // and DB.
-func NewData(cache Cache, db *sql.DB) *dataHandler {
+func NewData(cache Cache, db *sql.DB) Data {
 	return &dataHandler{cache, db}
 }
 
