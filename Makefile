@@ -1,6 +1,8 @@
 GOENVS = CGO_ENABLED=0 GOOS=linux GOARCH=386
 GOFLAGS = -a -installsuffix cgo -ldflags '-s'
 
+GOFOLDERS = ./cmd/... ./internal/...
+
 EMAILSERVICEPATH = ./cmd/email_service/
 MAINSERVICEPATH = ./cmd/user_handling_service/
 MAINSERVICEPROXYPATH = ./cmd/user_handling_service/proxy/
@@ -47,10 +49,13 @@ create_images: container_build
 	docker build --rm -t $(CLICKHOUSEIMAGE) $(CLICKHOUSEPATH)
 
 test:
-	go test -cpu 1,4 -race ./cmd/... ./internal/...
+	go test -cpu 1,4 -race $(GOFOLDERS)
 
 fmt:
-	go fmt ./cmd/... ./internal/...
+	go fmt $(GOFOLDERS)
+
+vet:
+	go vet $(GOFOLDERS)
 
 clean_images:
 	docker rmi $$(docker images --filter "dangling=true" -q --no-trunc)
