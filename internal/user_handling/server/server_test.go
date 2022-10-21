@@ -74,15 +74,15 @@ func TestAuthUserAddMethod(t *testing.T) {
 	uhServer.Logger = zerolog.Nop()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	testOperation := &data.Operation{data.User{"arbuz", "arbuz@gmail.com"}, "ADD"}
+    testOperation := &data.Operation{User: data.User{Nickname: "arbuz", Email: "arbuz@gmail.com"}, Method: "ADD"}
 	testKey := &pb.Key{Key: "KEF9cGJnPB7Ghhc-vFhouCEL7pCvOz7BjZW0ebLNBOa9qkHaVwdsrByXI002DKDyxkuk1p5_rRDCHTiKrtOtq7HHiphjnFo0Aj2srl7156uxc5_fvl9YjUcpuyabUKvHptiF--LY3_oNXmnQD44A-t3PUUIbi3QePLWo1eTCLZw"}
 	mockData.On("GetOperation", ctx, testKey.Key).Return(testOperation, nil)
 	mockData.On("AddUserToDatabase", ctx, testOperation.User).Return(nil)
 	response, err := uhServer.AuthUser(ctx, testKey)
-	testResponse := pb.Response{Message: "Method ADD was executed successfully."}
+	testResponse := &pb.Response{Message: "Method ADD was executed successfully."}
 	if assert.Nil(t, err) {
 		mockData.AssertExpectations(t)
-		assert.Equal(t, testResponse, *response)
+		assert.Equal(t, testResponse, response)
 	}
 }
 
@@ -92,15 +92,15 @@ func TestAuthUserDeleteMethod(t *testing.T) {
 	uhServer.Logger = zerolog.Nop()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	testOperation := &data.Operation{data.User{"MelonEnjoyer", "melonsarebetter@gmail.com"}, "DELETE"}
+    testOperation := &data.Operation{User: data.User{Nickname: "MelonEnjoyer", Email: "melonsarebetter@gmail.com"}, Method: "DELETE"}
 	testKey := &pb.Key{Key: "hdAp8Gj8BLBqD3L03L6fseVtzJRJdTMr16B9_C5dYPcV0mojUbU3uw7aLODP82MuSqCOpkdfGWjt_7qaNapL-MafNr-jC5LZL19XgTyzW5cSj5grG9IdyVlzfCdpHzddpfsBv-51GKKCzmTQB3d6RAt6mTJwQ_AYsgOtBUr7nrc"}
 	mockData.On("GetOperation", ctx, testKey.Key).Return(testOperation, nil)
 	mockData.On("DeleteUserFromDatabase", ctx, testOperation.User).Return(nil)
 	response, err := uhServer.AuthUser(ctx, testKey)
-	testResponse := pb.Response{Message: "Method DELETE was executed successfully."}
+	testResponse := &pb.Response{Message: "Method DELETE was executed successfully."}
 	if assert.Nil(t, err) {
 		mockData.AssertExpectations(t)
-		assert.Equal(t, testResponse, *response)
+		assert.Equal(t, testResponse, response)
 	}
 }
 
@@ -134,7 +134,7 @@ func TestListUsers(t *testing.T) {
 	uhServer := uh.NewUserHandlingServer(mockData, nil)
 	uhServer.Logger = zerolog.Nop()
 	mockStream := new(MockStream)
-	testUsers := []data.User{{"pupa", "buhga@example.com"}, {"lupa", "lteria@gmail.com"}}
+    testUsers := []data.User{{Nickname: "pupa", Email: "buhga@example.com"}, {Nickname: "lupa", Email: "lteria@gmail.com"}}
 	mockData.On("GetUsersFromDatabase", mock.Anything).Return(testUsers, nil)
 	for i := 0; i < len(testUsers); i++ {
 		mockStream.On("Send", mock.Anything).Return(nil)
@@ -155,7 +155,7 @@ func TestAddUserNotExists(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	mockData.On("CheckNicknameInDatabase", ctx, testUser.Nickname).Return(false, nil)
-	mockData.On("SetOperation", ctx, data.User{testUser.Nickname, testUser.Email}, "ADD").Return(testKey, nil)
+    mockData.On("SetOperation", ctx, data.User{Nickname: testUser.Nickname, Email: testUser.Email}, "ADD").Return(testKey, nil)
 	msgChecker := func(msg *sarama.ProducerMessage) error {
 		var err error
 		if msg.Topic != sc.AuthTopic {
@@ -166,11 +166,11 @@ func TestAddUserNotExists(t *testing.T) {
 		return err
 	}
 	mockProducer.ExpectSendMessageWithMessageCheckerFunctionAndSucceed(saramamock.MessageChecker(msgChecker))
-	testResponse := pb.Response{Message: "Auth email is sent."}
+	testResponse := &pb.Response{Message: "Auth email is sent."}
 	response, err := uhServer.AddUser(ctx, testUser)
 	if assert.Nil(t, err) {
 		mockData.AssertExpectations(t)
-		assert.Equal(t, testResponse, *response)
+		assert.Equal(t, testResponse, response)
 	}
 }
 
@@ -212,7 +212,7 @@ func TestDeleteUserExists(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	mockData.On("GetEmailByNickname", ctx, testUser.Nickname).Return(testUser.Email, nil)
-	mockData.On("SetOperation", ctx, data.User{testUser.Nickname, testUser.Email}, "DELETE").Return(testKey, nil)
+    mockData.On("SetOperation", ctx, data.User{Nickname: testUser.Nickname, Email: testUser.Email}, "DELETE").Return(testKey, nil)
 	msgChecker := func(msg *sarama.ProducerMessage) error {
 		var err error
 		if msg.Topic != sc.AuthTopic {
@@ -223,11 +223,11 @@ func TestDeleteUserExists(t *testing.T) {
 		return err
 	}
 	mockProducer.ExpectSendMessageWithMessageCheckerFunctionAndSucceed(saramamock.MessageChecker(msgChecker))
-	testResponse := pb.Response{Message: "Auth email is sent."}
+	testResponse := &pb.Response{Message: "Auth email is sent."}
 	response, err := uhServer.DeleteUser(ctx, testUser)
 	if assert.Nil(t, err) {
 		mockData.AssertExpectations(t)
-		assert.Equal(t, testResponse, *response)
+		assert.Equal(t, testResponse, response)
 	}
 }
 
@@ -250,7 +250,7 @@ func TestDailyMessagesToAllUsers(t *testing.T) {
 	mockProducer := saramamock.NewSyncProducer(t, sarama.NewConfig())
 	uhServer := uh.NewUserHandlingServer(mockData, mockProducer)
 	uhServer.Logger = zerolog.New(kafkawriter.New(mockProducer))
-	testUsers := []data.User{{"pupa", "buhga@example.com"}, {"lupa", "lteria@gmail.com"}}
+    testUsers := []data.User{{Nickname: "pupa", Email: "buhga@example.com"}, {Nickname: "lupa", Email: "lteria@gmail.com"}}
 	mockData.On("GetUsersFromDatabase", mock.Anything).Return(testUsers, nil)
 	rand.Seed(time.Now().UnixNano())
 	expectedFailCount := 0

@@ -80,7 +80,7 @@ func (s *UserHandlingServer) AddUser(ctx context.Context, user *pb.User) (*pb.Re
 	if _, err := mail.ParseAddress(user.Email); err != nil {
 		return nil, fmt.Errorf("Invalid email.")
 	}
-	key, err := s.SetOperation(ctx, data.User{user.Nickname, user.Email}, "ADD")
+    key, err := s.SetOperation(ctx, data.User{Nickname: user.Nickname, Email: user.Email}, "ADD")
 	if err != nil {
 		s.Error().Msgf("An error occured while accessing cache: %v", err)
 		return nil, err
@@ -104,7 +104,7 @@ func (s *UserHandlingServer) DeleteUser(ctx context.Context, user *pb.User) (*pb
 	} else if user.Email = email; email == "" {
 		return nil, fmt.Errorf("There is no user with such nickname.")
 	}
-	key, err := s.SetOperation(ctx, data.User{user.Nickname, user.Email}, "DELETE")
+    key, err := s.SetOperation(ctx, data.User{Nickname: user.Nickname, Email: user.Email}, "DELETE")
 	if err != nil {
 		s.Error().Msgf("An error occured while accessing cache: %v", err)
 		return nil, err
