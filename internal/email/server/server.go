@@ -239,10 +239,15 @@ func (s *EmailServer) createSMTPClient(email string) (*mail.SMTPClient, error) {
 
 // sendMessage tries to send the message with given SMTP client.
 // If all attempts have failed, returns last error.
-func (s *EmailServer) sendMessage(msg *mail.Email, client *mail.SMTPClient, email string) error {
+func (s *EmailServer) sendMessage(msg *mail.Email, email string) error {
 	var err error
 	timeout := timeoutStep
 	for i := 0; i < sendAttemptsAmount; i++ {
+		client, err := s.createSMTPClient(email)
+		if err != nil {
+			return err
+		}
+		defer client.Close()
 		err = msg.Send(client)
 		if err == nil {
 			return nil
@@ -257,11 +262,6 @@ func (s *EmailServer) sendMessage(msg *mail.Email, client *mail.SMTPClient, emai
 // SendAuthMessage creates a new SMTP connection through which sends a new auth message
 // using given email.
 func (s *EmailServer) SendAuthMessage(email, key, method string) error {
-	client, err := s.createSMTPClient(email)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
 	msg := mail.NewMSG()
 	msg.AddTo(email).SetSubject("Confirm action")
 	msgBody := s.makeAuthMessage(key, method)
@@ -269,7 +269,7 @@ func (s *EmailServer) SendAuthMessage(email, key, method string) error {
 	if msg.Error != nil {
 		return msg.Error
 	}
-	err = s.sendMessage(msg, client, email)
+	err := s.sendMessage(msg, email)
 	return err
 }
 
@@ -285,11 +285,7 @@ func (s *EmailServer) SendDailyMessage(email, nickname string) error {
 	if err != nil {
 		return err
 	}
-	client, err := s.createSMTPClient(email)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
+
 	msg := mail.NewMSG()
 	msg.AddTo(email).SetSubject(dailyMsgSubjectName).SetListUnsubscribe(strings.Join([]string{"<", s.mainServiceLocation, "v1/unsubscribe/", nickname, ">"}, ""))
 	attachedFileName := watermelonImgMailName + filepath.Ext(imgPath)
@@ -299,7 +295,7 @@ func (s *EmailServer) SendDailyMessage(email, nickname string) error {
 	if msg.Error != nil {
 		return msg.Error
 	}
-	err = s.sendMessage(msg, client, email)
+	err = s.sendMessage(msg, email)
 	return err
 }
 
