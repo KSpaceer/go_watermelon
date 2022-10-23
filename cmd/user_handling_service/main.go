@@ -1,8 +1,11 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"flag"
+	"fmt"
 	"net"
 	"os"
 	"strings"
@@ -10,6 +13,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/KSpaceer/go_watermelon/internal/data"
@@ -33,6 +37,10 @@ var (
 	redisAddr           = flag.String("redis-address", "redis:6379", "Redis DB address")
 	pgsInfoFilePath     = flag.String("pgs-info-file", "./pgsinfo.txt", "Postgres info file")
 	messageBrokersAddrs = flag.String("brokers-addresses", "kafka-1:9092,kafka-2:9092", "Message brokers addresses")
+	usingTLS            = flag.Bool("tls", false, "gRPC connection with TLS")
+	privateKeyPath      = flag.String("key", "./cert/key.pem", "Private key for TLS")
+	certPath            = flag.String("cert", "./cert/cert.pem", "x509 Certificate for TLS")
+	caCertPath          = flag.String("ca", "./cert/ca-cert.pem", "CA certificate trusted by the service")
 )
 
 func createRedisCache() (data.Cache, error) {
@@ -89,6 +97,29 @@ func createMBProducer(addrs []string, conf *sarama.Config) (sarama.SyncProducer,
 	return nil, err
 }
 
+func loadTLSCredentials() (credentials.TransportCredentials, error) {
+	caCertPEM, err := os.ReadFile(*caCertPath)
+	if err != nil {
+		return nil, err
+	}
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(caCertPEM) {
+		return nil, fmt.Errorf("Failed to add trusted CA certificate")
+	}
+
+	cert, err := tls.LoadX509KeyPair(*certPath, *privateKeyPath)
+	if err != nil {
+		return nil, err
+	}
+	conf := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    certPool,
+	}
+
+	return credentials.NewTLS(conf), nil
+}
+
 func main() {
 	flag.Parse()
 
@@ -140,7 +171,14 @@ func main() {
 	}
 	uhServer.Info().Msg("Listening and ready to serve.")
 
-	grpcServer := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
+	creds := insecure.NewCredentials()
+	if *usingTLS {
+		creds, err = loadTLSCredentials()
+		if err != nil {
+			uhServer.Fatal().Msgf("Failed to create TLS credentials: %v", err)
+		}
+	}
+	grpcServer := grpc.NewServer(grpc.Creds(creds))
 	pb.RegisterUserHandlingServer(grpcServer, uhServer)
 
 	cancelChan := make(chan struct{})

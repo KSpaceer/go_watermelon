@@ -20,6 +20,12 @@ CLICKHOUSEIMAGE = clickhouse-exposed
 CLIENTPATH = ./cmd/client
 CLIENTEXEC = ./cmd/client/client
 
+CADIR = ./security
+CACERTGEN = ./genca.sh
+CERTGEN = ./gen.sh
+CPCA = ./cpca.sh
+CERTDIRS = ../cmd/user_handling_service/cert ../cmd/user_handling_service/proxy/cert
+
 build: build_email_service build_main_service build_main_service_proxy
 
 build_email_service:
@@ -46,7 +52,6 @@ create_images: container_build
 	docker build --rm -t $(EMAILSERVICEIMAGE) $(EMAILSERVICEPATH)
 	docker build --rm -t $(MAINSERVICEIMAGE) $(MAINSERVICEPATH)
 	docker build --rm -t $(MAINSERVICEPROXYIMAGE) $(MAINSERVICEPROXYPATH)	
-	docker build --rm -t $(CLICKHOUSEIMAGE) $(CLICKHOUSEPATH)
 
 test:
 	go test -cpu 1,4 -race $(GOFOLDERS)
@@ -65,11 +70,17 @@ clean_executables:
 
 clean: clean_executables clean_images
 
-containers_up:
+containers_up: certs copy_ca_cert create_images
 	GWM_DELIVERY_TIME="" GWM_DELIVERY_INTERVAL="" GWM_HOST_EXTERNAL_IP=$$(curl ifconfig.me) docker-compose up
 
 containers_down:
 	docker-compose down
+
+certs:
+	cd $(CADIR); $(CACERTGEN); $(CERTGEN) $(CERTDIRS); cd ..
+
+copy_ca_cert:
+	cd $(CADIR); $(CPCA) $(CERTDIRS); cd ..
 
 build_client:
 	go build -o $(CLIENTEXEC) $(CLIENTPATH) 
