@@ -14,5 +14,5 @@ fi
 
 for path in "$@"
 do
-    cp ca-cert.pem "$path/"
+    cp ca-cert.pem "$path/."
 done
