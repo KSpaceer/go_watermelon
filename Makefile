@@ -68,7 +68,10 @@ clean_images:
 clean_executables:
 	rm -rf $(EMAILSERVICEEXEC) $(MAINSERVICEEXEC) $(MAINSERVICEPROXYEXEC) $(CLIENTEXEC)
 
-clean: clean_executables clean_images
+clean_tls:
+	cd $(CADIR); rm $(addsuffix /*, $(CERTDIRS)); rm *.pem *.srl;  cd ..
+
+clean: clean_executables clean_tls clean_images 
 
 containers_up: certs copy_ca_cert create_images
 	GWM_DELIVERY_TIME="" GWM_DELIVERY_INTERVAL="" GWM_HOST_EXTERNAL_IP=$$(curl ifconfig.me) docker-compose up
