@@ -100,10 +100,6 @@ func main() {
 		log.Fatal().Err(err).Msg("Can't register handler from gRPC endpoint - all attempts have failed.")
 	}
 	log.Info().Msg("Now listening.")
-    if *usingTLS {
-        err = http.ListenAndServeTLS(*httpServerAddr, *certPath, *keyPath, mux)
-    } else {
-	    err = http.ListenAndServe(*httpServerAddr, mux)
-    }
+	err = http.ListenAndServe(*httpServerAddr, mux)
 	log.Fatal().Err(err).Msg("Failed to listen and serve.")
 }
