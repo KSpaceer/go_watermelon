@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"database/sql"
 	"flag"
 	"fmt"
 	"net"
@@ -61,13 +60,13 @@ func createRedisCache() (data.Cache, error) {
 	return nil, err
 }
 
-func connectToDB() (*sql.DB, error) {
+func createPgsDB() (data.DB, error) {
 	var err error
 	timeout := timeoutStep
 	for i := 0; i < connectAttempts; i++ {
 		log.Info().Msg("Connecting to database...")
-		var db *sql.DB
-		db, err = data.ConnectToPGS(*pgsInfoFilePath)
+		var db data.DB
+		db, err = data.NewPgsDB(*pgsInfoFilePath)
 		if err == nil {
 			log.Info().Msg("Successfully connected to database.")
 			return db, nil
@@ -130,7 +129,7 @@ func main() {
 		log.Fatal().Err(err).Msg("All attempts to connect to cache have failed.")
 	}
 
-	db, err := connectToDB()
+	db, err := createPgsDB()
 	if err != nil {
 		cache.Close()
 		log.Fatal().Err(err).Msg("All attempts to connect to database have failed.")

@@ -3,7 +3,6 @@ package data
 import (
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"strings"
@@ -62,7 +61,7 @@ type Data interface {
 // dataHandler implements Data interface and used as its basic implementation.
 type dataHandler struct {
 	cache Cache
-	db    *sql.DB
+	db    DB
 }
 
 // User represents a user with certain nickname and email.
@@ -80,7 +79,7 @@ type Operation struct {
 
 // NewData creates a new Data instance using given Cache
 // and DB.
-func NewData(cache Cache, db *sql.DB) Data {
+func NewData(cache Cache, db DB) Data {
 	return &dataHandler{cache, db}
 }
 
@@ -149,11 +148,8 @@ func (d *dataHandler) CheckNicknameInDatabase(ctx context.Context, nickname stri
 func (d *dataHandler) GetEmailByNickname(ctx context.Context, nickname string) (string, error) {
 	email, err := d.cache.Get(ctx, nickname)
 	if err == CacheNil {
-		row := d.db.QueryRowContext(ctx, "SELECT email FROM Users WHERE nickname = $1", nickname)
-		err = row.Scan(&email)
-		if err == sql.ErrNoRows {
-			email = ""
-		} else if err != nil {
+		email, err := d.db.GetEmailByNickname(ctx, nickname)
+		if err != nil {
 			return "", err
 		}
 		d.cache.Set(ctx, nickname, email, cacheExpiration)
@@ -167,8 +163,9 @@ func (d *dataHandler) GetEmailByNickname(ctx context.Context, nickname string) (
 // AddUserToDatabase adds new user record into database. It also deletes record with ListUsersKey
 // from cache because its' value is outdated (if the insertion succeeds).
 func (d *dataHandler) AddUserToDatabase(ctx context.Context, user User) error {
-	result, err := d.db.ExecContext(ctx, "INSERT INTO Users VALUES ($1, $2)", user.Nickname, user.Email)
-	if rows, err := result.RowsAffected(); err == nil && rows > 0 {
+	var affectedRows bool
+	var err error
+	if affectedRows, err = d.db.InsertUser(ctx, user); err == nil && affectedRows {
 		d.cache.Del(ctx, ListUsersKey)
 	}
 	return err
@@ -177,8 +174,9 @@ func (d *dataHandler) AddUserToDatabase(ctx context.Context, user User) error {
 // DeleteUserFromDatabase deletes records of user from database. In case of success, it also
 // deletes record with ListUsersKey from cache because its' value is outdated.
 func (d *dataHandler) DeleteUserFromDatabase(ctx context.Context, user User) error {
-	result, err := d.db.ExecContext(ctx, "DELETE FROM Users WHERE nickname=$1 AND email=$2", user.Nickname, user.Email)
-	if rows, err := result.RowsAffected(); err == nil && rows > 0 {
+	var affectedRows bool
+	var err error
+	if affectedRows, err = d.db.DeleteUser(ctx, user); err == nil && affectedRows {
 		d.cache.Del(ctx, ListUsersKey)
 	}
 	return err
@@ -205,20 +203,8 @@ func (d *dataHandler) GetUsersFromDatabase(ctx context.Context) ([]User, error) 
 // It selects all rows from database and inserts them into User slice, then encodes the slice
 // into JSON string and adds it into cache. After this cacheMiss returns created User slice.
 func (d *dataHandler) cacheMiss(ctx context.Context) ([]User, error) {
-	var usersList []User
-	rows, err := d.db.QueryContext(ctx, "SELECT nickname, email FROM Users")
-	defer rows.Close()
+	usersList, err := d.db.SelectAllUsers(ctx)
 	if err != nil {
-		return nil, err
-	}
-	for rows.Next() {
-		var user User
-		if err := rows.Scan(&user.Nickname, &user.Email); err != nil {
-			return nil, err
-		}
-		usersList = append(usersList, user)
-	}
-	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	buf := new(strings.Builder)
