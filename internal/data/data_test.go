@@ -96,7 +96,7 @@ func TestGetEmailByNicknameCacheMiss(t *testing.T) {
 	}
 	d := &dataHandler{}
 	d.cache = &RedisCache{cache}
-	d.db = db
+	d.db = &PgsDB{db}
 	testNickname := "PatrickBateman"
 	testEmail := "americanpsycho@gmail.com"
 	cacheMock.ExpectGet(testNickname).RedisNil()
@@ -119,7 +119,7 @@ func TestGetEmailByNicknameNotExists(t *testing.T) {
 	}
 	d := &dataHandler{}
 	d.cache = &RedisCache{cache}
-	d.db = db
+	d.db = &PgsDB{db}
 	testNickname := "Moon"
 	cacheMock.ExpectGet(testNickname).RedisNil()
 	rows := sqlmock.NewRows([]string{"email"})
@@ -154,7 +154,7 @@ func TestCheckNicknameInDatabaseCacheMiss(t *testing.T) {
 	}
 	d := &dataHandler{}
 	d.cache = &RedisCache{cache}
-	d.db = db
+	d.db = &PgsDB{db}
 	testNickname := "ThomasShelby"
 	testEmail := "peakyblinders@example.com"
 	cacheMock.ExpectGet(testNickname).RedisNil()
@@ -177,7 +177,7 @@ func TestCheckNicknameInDatabaseNotExists(t *testing.T) {
 	}
 	d := &dataHandler{}
 	d.cache = &RedisCache{cache}
-	d.db = db
+	d.db = &PgsDB{db}
 	testNickname := "WatermelonHater"
 	cacheMock.ExpectGet(testNickname).RedisNil()
 	rows := sqlmock.NewRows([]string{"email"})
@@ -199,7 +199,7 @@ func TestAddUserToDatabase(t *testing.T) {
 	}
 	d := &dataHandler{}
 	d.cache = &RedisCache{cache}
-	d.db = db
+	d.db = &PgsDB{db}
 	testUser := User{"Newbie", "nwb@example.com"}
 	dbMock.ExpectExec(regexp.QuoteMeta(`INSERT INTO Users VALUES ($1, $2)`)).WithArgs(testUser.Nickname, testUser.Email).WillReturnResult(sqlmock.NewResult(1, 1))
 	cacheMock.ExpectDel(ListUsersKey).SetVal(1)
@@ -217,7 +217,7 @@ func TestDeleteUserFromDatabase(t *testing.T) {
 	}
 	d := &dataHandler{}
 	d.cache = &RedisCache{cache}
-	d.db = db
+	d.db = &PgsDB{db}
 	testUser := User{"Old", "old@example.com"}
 	dbMock.ExpectExec(regexp.QuoteMeta(`DELETE FROM Users WHERE nickname=$1 AND email=$2`)).WithArgs(testUser.Nickname, testUser.Email).WillReturnResult(sqlmock.NewResult(1, 1))
 	cacheMock.ExpectDel(ListUsersKey).SetVal(0)
@@ -252,7 +252,7 @@ func TestGetUsersFromDatabaseCacheMiss(t *testing.T) {
 	}
 	d := &dataHandler{}
 	d.cache = &RedisCache{cache}
-	d.db = db
+	d.db = &PgsDB{db}
 	cacheMock.ExpectGet(ListUsersKey).RedisNil()
 	rows := sqlmock.NewRows([]string{"nickname", "email"})
 	rows.AddRow("pupa", "buhga@gmail.com").AddRow("lupa", "lteria@gmail.com")
@@ -281,7 +281,7 @@ func TestGetUsersFromDatabaseEmpty(t *testing.T) {
 	}
 	d := &dataHandler{}
 	d.cache = &RedisCache{cache}
-	d.db = db
+	d.db = &PgsDB{db}
 	cacheMock.ExpectGet(ListUsersKey).RedisNil()
 	rows := sqlmock.NewRows([]string{"nickname", "email"})
 	dbMock.ExpectQuery(regexp.QuoteMeta(`SELECT nickname, email FROM Users`)).WillReturnRows(rows).RowsWillBeClosed()
